@@ -16,7 +16,7 @@ instance/
 .flaskenv
 
 # Environment variables
-.venv
+.env
 
 # OS junk
 .DS_Store

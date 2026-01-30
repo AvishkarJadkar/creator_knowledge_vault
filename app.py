@@ -3,6 +3,7 @@ from extensions import db
 from auth import auth_bp
 from content import content_bp
 from models import Content
+from search import search_bp
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"
@@ -16,6 +17,8 @@ from models import User  # noqa
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(content_bp)
+app.register_blueprint(search_bp)
+
 
 @app.route("/")
 def home():

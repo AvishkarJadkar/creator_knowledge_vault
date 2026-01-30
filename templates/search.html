@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Search Vault</h3>
+
+<form method="post">
+    <input name="query" placeholder="Search..." required>
+    <button type="submit">Search</button>
+</form>
+
+<hr>
+
+{% for c in results %}
+  <div>
+    <strong>{{ c.title }}</strong>
+    <p>{{ c.body[:200] }}...</p>
+    <hr>
+  </div>
+{% else %}
+  <p>No results.</p>
+{% endfor %}
+{% endblock %}

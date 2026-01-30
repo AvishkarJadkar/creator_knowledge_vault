@@ -3,6 +3,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from extensions import db
 from models import Content
 from pypdf import PdfReader
+import json
+from ai import get_embedding
+from models import Embedding
+
 
 content_bp = Blueprint("content", __name__)
 
@@ -36,6 +40,7 @@ def add_content():
         if file and file.filename:
             body = extract_text(file)
 
+        # 1️⃣ CREATE Content object
         content = Content(
             user_id=session["user_id"],
             title=title,
@@ -43,9 +48,24 @@ def add_content():
             content_type=content_type,
         )
 
+        # 2️⃣ SAVE content FIRST
         db.session.add(content)
-        db.session.commit()
+        db.session.commit()   # <-- content.id exists AFTER this line
 
+        # 3️⃣ TRY embedding (OPTION A)
+        try:
+            embedding = get_embedding(content.body)
+            db.session.add(
+                Embedding(
+                    content_id=content.id,
+                    vector=json.dumps(embedding)
+                )
+            )
+            db.session.commit()
+        except Exception as e:
+            print("Embedding skipped:", e)
+
+        # 4️⃣ Redirect regardless of embedding success
         return redirect(url_for("dashboard"))
 
     return render_template("add_content.html")
