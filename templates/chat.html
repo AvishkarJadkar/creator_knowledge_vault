@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Chat with your Vault</h3>
+
+<form method="post">
+    <textarea name="question" rows="4" cols="60" placeholder="Ask something..." required></textarea><br><br>
+    <button type="submit">Ask</button>
+</form>
+
+{% if answer %}
+<hr>
+<h4>Answer</h4>
+<p>{{ answer }}</p>
+{% endif %}
+{% endblock %}

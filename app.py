@@ -4,6 +4,8 @@ from auth import auth_bp
 from content import content_bp
 from models import Content
 from search import search_bp
+from chat import chat_bp
+
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"
@@ -18,6 +20,8 @@ from models import User  # noqa
 app.register_blueprint(auth_bp)
 app.register_blueprint(content_bp)
 app.register_blueprint(search_bp)
+app.register_blueprint(chat_bp)
+
 
 
 @app.route("/")
@@ -40,4 +44,7 @@ def dashboard():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True, use_reloader=False)
+
+
+

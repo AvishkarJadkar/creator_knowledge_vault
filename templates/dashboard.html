@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-<a href="/add">+ Add Content</a>
+
+<a href="/add">Add</a> |
+<a href="/search">Search</a> |
+<a href="/chat">Chat</a>
+
 <hr>
 
 <h3>Your Vault</h3>
@@ -15,4 +19,5 @@
 {% else %}
     <p>No content yet.</p>
 {% endfor %}
+
 {% endblock %}
