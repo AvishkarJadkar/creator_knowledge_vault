@@ -1,0 +1,30 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+
+# Database
+*.db
+*.sqlite3
+
+# Flask
+instance/
+.flaskenv
+
+# Environment variables
+.venv
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Future uploads
+uploads/
