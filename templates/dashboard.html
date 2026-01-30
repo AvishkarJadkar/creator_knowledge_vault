@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<a href="/add">+ Add Content</a>
+<hr>
+
+<h3>Your Vault</h3>
+
+{% for c in contents %}
+    <div>
+        <strong>{{ c.title }}</strong> ({{ c.content_type }})<br>
+        <small>{{ c.created_at }}</small>
+        <p>{{ c.body[:200] }}...</p>
+        <hr>
+    </div>
+{% else %}
+    <p>No content yet.</p>
+{% endfor %}
+{% endblock %}

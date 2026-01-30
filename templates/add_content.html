@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Add Content</h3>
+
+<form method="post" enctype="multipart/form-data">
+    <input name="title" placeholder="Title" required><br><br>
+
+    <select name="content_type">
+        <option value="note">Note</option>
+        <option value="idea">Idea</option>
+        <option value="pdf">PDF</option>
+    </select><br><br>
+
+    <textarea name="body" placeholder="Paste text here" rows="8" cols="50"></textarea><br><br>
+
+    <input type="file" name="file" accept=".pdf,.txt"><br><br>
+
+    <button type="submit">Save</button>
+</form>
+{% endblock %}
