@@ -5,6 +5,7 @@ from content import content_bp
 from models import Content
 from search import search_bp
 from chat import chat_bp
+from remix import remix_bp
 
 
 app = Flask(__name__)
@@ -21,6 +22,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(content_bp)
 app.register_blueprint(search_bp)
 app.register_blueprint(chat_bp)
+app.register_blueprint(remix_bp)
 
 
 

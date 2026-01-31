@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h3>Remix: {{ content.title }}</h3>
+
+<form method="post">
+    <select name="remix_type">
+        <option value="twitter">Twitter / X Thread</option>
+        <option value="linkedin">LinkedIn Post</option>
+        <option value="summary">Summary</option>
+        <option value="ideas">New Ideas</option>
+    </select>
+    <button type="submit">Generate</button>
+</form>
+
+{% if output %}
+<hr>
+<h4>Output</h4>
+<pre>{{ output }}</pre>
+{% endif %}
+
+{% endblock %}

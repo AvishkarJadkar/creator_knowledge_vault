@@ -11,7 +11,10 @@
 
 {% for c in contents %}
     <div>
-        <strong>{{ c.title }}</strong> ({{ c.content_type }})<br>
+        <strong>{{ c.title }}</strong> 
+        <a href="/remix/{{ c.id }}">Remix</a>
+
+        ({{ c.content_type }})<br>
         <small>{{ c.created_at }}</small>
         <p>{{ c.body[:200] }}...</p>
         <hr>
