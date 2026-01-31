@@ -1,4 +1,7 @@
 {% extends "base.html" %}
+{% if not contents %}
+  <p>Your vault is empty. Add your first note.</p>
+{% endif %}
 {% block content %}
 
 <a href="/add">Add</a> |

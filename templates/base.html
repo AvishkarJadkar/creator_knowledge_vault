@@ -1,11 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Creator Knowledge Vault</title>
+  <title>Creator Knowledge Vault</title>
+  <style>
+    body { font-family: sans-serif; max-width: 900px; margin: 40px auto; }
+    nav a { margin-right: 12px; }
+    textarea, input, select, button { width: 100%; margin-top: 8px; }
+    button { padding: 8px; cursor: pointer; }
+    .card { border: 1px solid #ddd; padding: 12px; margin-bottom: 12px; }
+  </style>
 </head>
 <body>
-    <h2>Creator Knowledge Vault</h2>
-    <hr>
-    {% block content %}{% endblock %}
+
+<nav>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/add">Add</a>
+  <a href="/search">Search</a>
+  <a href="/chat">Chat</a>
+  <a href="/logout">Logout</a>
+</nav>
+
+<hr>
+
+{% block content %}{% endblock %}
+
 </body>
+</html>
+
 </html>

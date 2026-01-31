@@ -16,7 +16,16 @@
 {% if output %}
 <hr>
 <h4>Output</h4>
-<pre>{{ output }}</pre>
+
+<pre id="remix-output">{{ output }}</pre>
+
+<button onclick="
+  navigator.clipboard.writeText(
+    document.getElementById('remix-output').innerText
+  )
+">
+  Copy to clipboard
+</button>
 {% endif %}
 
 {% endblock %}

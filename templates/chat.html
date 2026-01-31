@@ -7,6 +7,9 @@
     <button type="submit">Ask</button>
 </form>
 
+{% if not answer %}
+  <p>Ask something about your saved content.</p>
+{% endif %}
 {% if answer %}
 <hr>
 <h4>Answer</h4>

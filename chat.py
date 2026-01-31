@@ -24,31 +24,28 @@ def chat():
         if not contents:
             answer = "Your vault is empty."
             return render_template("chat.html", answer=answer)
-
+        
+        contents = contents[:10]  # limit to last 10 items
         context = "\n\n".join(
             f"Title: {c.title}\n{c.body}" for c in contents
         )
 
         prompt = f"""
-            You are an assistant helping a creator answer questions using their own notes.
+            You are an assistant answering ONLY using the user's content.
 
-            RULES:
-            - Use ONLY the content provided below
-            - Do NOT repeat the content verbatim
-            - Do NOT list titles unless asked
-            - Answer in clear natural language
-            - If the answer is not found, say exactly: Not found in your vault.
+            STRICT RULES:
+            - Do NOT use outside knowledge
+            - Do NOT hallucinate
+            - If unsure, say exactly: Not found in your vault.
 
-            CONTENT START
+            CONTENT:
             {context}
-            CONTENT END
 
             QUESTION:
             {question}
 
             ANSWER:
             """
-
 
         try:
             response = client.models.generate_content(
@@ -58,6 +55,7 @@ def chat():
 
             answer = response.text
         except Exception as e:
-            answer = f"Chat error: {e}"
+            answer = "Something went wrong. Try again."
+
 
     return render_template("chat.html", answer=answer)
