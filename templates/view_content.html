@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>{{ content.title }}</h2>
+<p><em>{{ content.content_type }}</em></p>
+
+<hr>
+
+<pre style="white-space: pre-wrap;">
+{{ content.body }}
+</pre>
+
+<a href="/dashboard">← Back to dashboard</a>
+
+{% endblock %}

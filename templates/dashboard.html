@@ -20,6 +20,7 @@
         ({{ c.content_type }})<br>
         <small>{{ c.created_at }}</small>
         <p>{{ c.body[:200] }}...</p>
+        <a href="/content/{{ c.id }}">View full</a>
         <hr>
     </div>
 {% else %}

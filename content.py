@@ -83,3 +83,14 @@ def add_content():
 
     return render_template("add_content.html")
 
+@content_bp.route("/content/<int:content_id>")
+def view_content(content_id):
+    if "user_id" not in session:
+        return redirect(url_for("auth.login"))
+
+    content = Content.query.get_or_404(content_id)
+
+    if content.user_id != session["user_id"]:
+        return redirect(url_for("dashboard"))
+
+    return render_template("view_content.html", content=content)
