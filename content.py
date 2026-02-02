@@ -6,6 +6,8 @@ from pypdf import PdfReader
 import json
 from ai import get_embedding
 from models import Embedding
+from youtube_utils import get_youtube_transcript
+from youtube_utils import get_youtube_transcript, get_youtube_title
 
 
 content_bp = Blueprint("content", __name__)
@@ -35,6 +37,17 @@ def add_content():
         title = request.form["title"]
         content_type = request.form["content_type"]
         body = request.form.get("body", "")
+
+        youtube_url = request.form.get("youtube_url")
+
+        if youtube_url:
+            try:
+                body = get_youtube_transcript(youtube_url)
+                title = get_youtube_title(youtube_url)
+                content_type = "youtube"
+
+            except Exception as e:
+                return f"Failed to fetch YouTube transcript: {e}"
 
         file = request.files.get("file")
         if file and file.filename:
@@ -69,3 +82,4 @@ def add_content():
         return redirect(url_for("dashboard"))
 
     return render_template("add_content.html")
+
