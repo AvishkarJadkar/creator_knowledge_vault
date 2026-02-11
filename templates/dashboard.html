@@ -1,30 +1,40 @@
 {% extends "base.html" %}
-{% if not contents %}
-  <p>Your vault is empty. Add your first note.</p>
-{% endif %}
+
 {% block content %}
 
-<a href="/add">Add</a> |
-<a href="/search">Search</a> |
-<a href="/chat">Chat</a>
+<div class="flex justify-between items-center mb-4">
+    <h3>Your Vault</h3>
+    <a href="/add" class="btn">Add Content</a>
+</div>
 
-<hr>
+<div class="grid-3">
+    {% for c in contents %}
+    <div class="card" style="display: flex; flex-direction: column;">
+        <div class="flex justify-between items-center mb-4">
+            <h4 style="margin: 0; font-size: 1.1rem;">{{ c.title }}</h4>
+            <span class="text-muted" style="font-size: 0.75rem; text-transform: uppercase;">{{ c.content_type }}</span>
+        </div>
 
-<h3>Your Vault</h3>
+        <div style="flex-grow: 1;">
+            <p class="text-muted" style="margin-bottom: 1rem;">{{ c.body[:150] }}...</p>
+        </div>
 
-{% for c in contents %}
-    <div>
-        <strong>{{ c.title }}</strong> 
-        <a href="/remix/{{ c.id }}">Remix</a>
+        <hr style="margin: 1rem 0;">
 
-        ({{ c.content_type }})<br>
-        <small>{{ c.created_at }}</small>
-        <p>{{ c.body[:200] }}...</p>
-        <a href="/content/{{ c.id }}">View full</a>
-        <hr>
+        <div class="flex justify-between items-center">
+            <small class="text-muted">{{ c.created_at }}</small>
+            <div class="flex" style="gap: 0.5rem;">
+                <a href="/remix/{{ c.id }}" class="btn btn-sm btn-outline">Remix</a>
+                <a href="/content/{{ c.id }}" class="btn btn-sm btn-secondary">View</a>
+            </div>
+        </div>
     </div>
-{% else %}
-    <p>No content yet.</p>
-{% endfor %}
+    {% else %}
+    <div class="card text-center" style="grid-column: 1 / -1;">
+        <p style="margin-bottom: 1rem;">Your vault is empty.</p>
+        <a href="/add" class="btn">Add your first note</a>
+    </div>
+    {% endfor %}
+</div>
 
 {% endblock %}

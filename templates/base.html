@@ -1,30 +1,38 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Creator Knowledge Vault</title>
-  <style>
-    body { font-family: sans-serif; max-width: 900px; margin: 40px auto; }
-    nav a { margin-right: 12px; }
-    textarea, input, select, button { width: 100%; margin-top: 8px; }
-    button { padding: 8px; cursor: pointer; }
-    .card { border: 1px solid #ddd; padding: 12px; margin-bottom: 12px; }
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
 
-<nav>
-  <a href="/dashboard">Dashboard</a>
-  <a href="/add">Add</a>
-  <a href="/search">Search</a>
-  <a href="/chat">Chat</a>
-  <a href="/logout">Logout</a>
-</nav>
+  <nav class="navbar">
+    <div class="nav-brand"> Creator Knowledge Vault</div>
+    <div class="nav-links">
+      {% if session.get('user_id') %}
+      <a href="/dashboard">Dashboard</a>
+      <a href="/add">Add</a>
+      <a href="/search">Search</a>
+      <a href="/chat">Chat</a>
+      <a href="/logout" class="btn btn-sm btn-outline">Logout</a>
+      {% else %}
+      <a href="/login">Login</a>
+      <a href="/signup">Signup</a>
+      {% endif %}
+    </div>
+  </nav>
 
-<hr>
-
-{% block content %}{% endblock %}
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
 
 </body>
-</html>
 
 </html>

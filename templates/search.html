@@ -1,21 +1,36 @@
 {% extends "base.html" %}
 {% block content %}
-<h3>Search Vault</h3>
+<div style="max-width: 800px; margin: 0 auto;">
+  <h3 class="mb-4">Search Vault</h3>
 
-<form method="post">
-    <input name="query" placeholder="Search..." required>
-    <button type="submit">Search</button>
-</form>
-
-<hr>
-
-{% for c in results %}
-  <div>
-    <strong>{{ c.title }}</strong>
-    <p>{{ c.body[:200] }}...</p>
-    <hr>
+  <div class="card mb-4" style="background-color: var(--bg-body); border: none; padding: 0;">
+    <form method="post" style="display: flex; gap: var(--spacing-sm); margin: 0;">
+      <input name="query" placeholder="Search your knowledge vault..." required style="margin: 0; flex-grow: 1;">
+      <button type="submit" class="btn"
+        style="width: auto; padding-left: 1.5rem; padding-right: 1.5rem;">Search</button>
+    </form>
   </div>
-{% else %}
-  <p>No results.</p>
-{% endfor %}
+
+  {% if results is defined %}
+  <hr>
+  <h4 class="mb-4">Results</h4>
+  <div class="grid-3">
+    {% for c in results %}
+    <div class="card" style="display: flex; flex-direction: column;">
+      <h4 style="margin-top: 0;">{{ c.title }}</h4>
+      <p style="flex-grow: 1;">{{ c.body[:150] }}...</p>
+      <hr style="margin: 1rem 0;">
+      <div class="flex justify-between items-center">
+        <span class="text-muted" style="font-size: 0.8rem;">{{ c.title }}</span>
+        <!-- Showing title as type or similar? Origin code showed title again in strong tag. Wait, origin line 14 was title. -->
+        <!-- checking original file, line 14 was c.title. line 20 in dashboard was content_type. search.html didn't show type. I'll add a 'View' button. -->
+        <a href="/content/{{ c.id }}" class="btn btn-sm btn-secondary">View Content</a>
+      </div>
+    </div>
+    {% else %}
+    <p class="text-muted">No results found.</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
 {% endblock %}

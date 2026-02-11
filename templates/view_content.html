@@ -1,15 +1,27 @@
 {% extends "base.html" %}
 {% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+    <a href="/dashboard" class="text-muted" style="display: inline-block; margin-bottom: 1rem;">&larr; Back to
+        Dashboard</a>
 
-<h2>{{ content.title }}</h2>
-<p><em>{{ content.content_type }}</em></p>
+    <div class="card">
+        <div class="flex justify-between items-center mb-4">
+            <h2 style="margin: 0;">{{ content.title }}</h2>
+            <span class="text-muted"
+                style="text-transform: uppercase; font-size: 0.875rem; border: 1px solid var(--border-color); padding: 0.25rem 0.5rem; border-radius: var(--radius-md);">{{
+                content.content_type }}</span>
+        </div>
 
-<hr>
+        <hr>
 
-<pre style="white-space: pre-wrap;">
-{{ content.body }}
-</pre>
+        <div style="line-height: 1.8; font-size: 1.05rem; white-space: pre-wrap;">{{ content.body }}</div>
 
-<a href="/dashboard">← Back to dashboard</a>
+        <hr>
 
+        <div class="flex justify-between items-center">
+            <small class="text-muted">Created: {{ content.created_at }}</small>
+            <a href="/remix/{{ content.id }}" class="btn btn-outline">Remix This</a>
+        </div>
+    </div>
+</div>
 {% endblock %}
