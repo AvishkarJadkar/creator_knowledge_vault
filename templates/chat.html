@@ -1,18 +1,33 @@
 {% extends "base.html" %}
 {% block content %}
-<h3>Chat with your Vault</h3>
+<div style="max-width: 800px; margin: 0 auto;">
+  <div class="flex justify-between items-center mb-4">
+    <h3>Chat with your Vault</h3>
+  </div>
 
-<form method="post">
-    <textarea name="question" rows="4" cols="60" placeholder="Ask something..." required></textarea><br><br>
-    <button type="submit">Ask</button>
-</form>
+  <div class="card">
+    {% if answer %}
+    <div class="chat-display mb-4">
+      <div class="message-user">
+        <small class="text-muted block mb-1">You</small>
+        <p>{{ request.form.get('question', '') }}</p>
+      </div>
+      <div class="message-bot">
+        <small class="text-muted block mb-1">Vault AI</small>
+        <p>{{ answer|safe }}</p>
+      </div>
+    </div>
+    <hr>
+    {% endif %}
 
-{% if not answer %}
-  <p>Ask something about your saved content.</p>
-{% endif %}
-{% if answer %}
-<hr>
-<h4>Answer</h4>
-<p>{{ answer }}</p>
-{% endif %}
+    <form method="post">
+      <label for="question"><strong>Ask a question</strong></label>
+      <textarea name="question" id="question" rows="3" placeholder="Ex: What are my notes on productivity?" required
+        class="mb-4" style="resize: vertical;"></textarea>
+      <div class="text-right" style="text-align: right;">
+        <button type="submit" class="btn">Ask Question</button>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}

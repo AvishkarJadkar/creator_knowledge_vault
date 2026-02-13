@@ -1,10 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
-<h3>Signup</h3>
-<form method="post">
-    <input name="email" placeholder="Email" required><br><br>
-    <input name="password" type="password" placeholder="Password" required><br><br>
-    <button type="submit">Signup</button>
-</form>
-<a href="/login">Login</a>
+<div class="card" style="max-width: 400px; margin: 40px auto;">
+    <h3 class="mb-4 text-center">Signup</h3>
+    <form method="post">
+        <label for="email">Email</label>
+        <input name="email" id="email" type="email" placeholder="Enter your email" required class="mb-4">
+
+        <label for="password">Password</label>
+        <input name="password" id="password" type="password" placeholder="Enter your password" required class="mb-4">
+
+        <button type="submit" class="btn" style="width: 100%;">Signup</button>
+    </form>
+    <div class="text-center">
+        <small>Already have an account? <a href="/login">Login</a></small>
+    </div>
+</div>
 {% endblock %}

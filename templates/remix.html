@@ -1,31 +1,42 @@
 {% extends "base.html" %}
 {% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+  <h3 class="mb-4">Remix Content</h3>
 
-<h3>Remix: {{ content.title }}</h3>
+  <div class="card mb-4">
+    <h4 style="margin-top: 0;">{{ content.title }}</h4>
+    <form method="post" class="mt-4" style="margin-bottom: 0;">
+      <div class="flex" style="gap: var(--spacing-md); align-items: flex-end;">
+        <div style="flex-grow: 1;">
+          <label for="remix_type">Choose Remix Style</label>
+          <select name="remix_type" id="remix_type" style="margin-bottom: 0;">
+            <option value="twitter">Twitter / X Thread</option>
+            <option value="linkedin">LinkedIn Post</option>
+            <option value="summary">Summary</option>
+            <option value="ideas">New Ideas</option>
+          </select>
+        </div>
+        <button type="submit" class="btn">Generate Remix</button>
+      </div>
+    </form>
+  </div>
 
-<form method="post">
-    <select name="remix_type">
-        <option value="twitter">Twitter / X Thread</option>
-        <option value="linkedin">LinkedIn Post</option>
-        <option value="summary">Summary</option>
-        <option value="ideas">New Ideas</option>
-    </select>
-    <button type="submit">Generate</button>
-</form>
-
-{% if output %}
-<hr>
-<h4>Output</h4>
-
-<pre id="remix-output">{{ output }}</pre>
-
-<button onclick="
-  navigator.clipboard.writeText(
-    document.getElementById('remix-output').innerText
-  )
-">
-  Copy to clipboard
-</button>
-{% endif %}
-
+  {% if output %}
+  <div class="card">
+    <div class="flex justify-between items-center mb-4">
+      <h4 style="margin: 0;">Generated Output</h4>
+      <button class="btn btn-sm btn-outline" onclick="
+              navigator.clipboard.writeText(
+                document.getElementById('remix-output').innerText
+              )
+            ">
+        Copy to Clipboard
+      </button>
+    </div>
+    <hr>
+    <pre id="remix-output"
+      style="white-space: pre-wrap; background: var(--bg-body); padding: 1rem; border-radius: var(--radius-md); font-family: inherit;">{{ output }}</pre>
+  </div>
+  {% endif %}
+</div>
 {% endblock %}

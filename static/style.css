@@ -1,0 +1,313 @@
+:root {
+    /* Color Palette - Modern Indigo/Violet Theme */
+    --primary: #6366f1;
+    --primary-hover: #4f46e5;
+    --primary-light: #e0e7ff;
+    --text-main: #1f2937;
+    --text-muted: #6b7280;
+    --bg-body: #f3f4f6;
+    --bg-card: #ffffff;
+    --border-color: #e5e7eb;
+    --success: #10b981;
+    --danger: #ef4444;
+
+    /* Spacing */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+
+    /* Typography */
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+/* Reset & Base */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-body);
+    color: var(--text-main);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    margin-top: 0;
+    color: #111827;
+    font-weight: 600;
+}
+
+a {
+    color: var(--primary);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+a:hover {
+    text-decoration: underline;
+    color: var(--primary-hover);
+}
+
+hr {
+    border: 0;
+    border-top: 1px solid var(--border-color);
+    margin: var(--spacing-lg) 0;
+}
+
+/* Layout */
+.container {
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 var(--spacing-md);
+    flex-grow: 1;
+}
+
+/* Navigation */
+.navbar {
+    background-color: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
+    padding: var(--spacing-md) 0;
+    margin-bottom: var(--spacing-xl);
+    box-shadow: var(--shadow-sm);
+}
+
+.navbar .nav-brand {
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: var(--primary);
+}
+
+.navbar .container,
+/* Navbar itself acts as container in modified base.html if not wrapped, but we wrapped nav content inside nav tags. 
+   Wait, base.html structure: <nav class="navbar"><div class="nav-brand">...</div> ... </nav> 
+   It needs flex layout. */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-left: var(--spacing-xl);
+    padding-right: var(--spacing-xl);
+}
+
+.nav-links {
+    display: flex;
+    gap: var(--spacing-lg);
+    align-items: center;
+}
+
+.nav-links a {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.nav-links a:hover,
+.nav-links a.active {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+    background-color: var(--primary);
+    color: white;
+    text-decoration: none !important;
+    /* Override anchor styles */
+}
+
+.btn:hover {
+    background-color: var(--primary-hover);
+}
+
+.btn-secondary {
+    background-color: white;
+    border-color: var(--border-color);
+    color: var(--text-main);
+}
+
+.btn-secondary:hover {
+    background-color: var(--bg-body);
+    color: var(--text-main);
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--primary);
+    color: var(--primary);
+}
+
+.btn-outline:hover {
+    background-color: var(--primary-light);
+}
+
+.btn-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* Forms */
+form {
+    margin-bottom: var(--spacing-lg);
+}
+
+label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: var(--spacing-xs);
+    color: var(--text-main);
+}
+
+input,
+textarea,
+select {
+    width: 100%;
+    padding: 0.625rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background-color: white;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+/* Cards */
+.card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: var(--spacing-lg);
+    transition: box-shadow 0.2s;
+}
+
+.card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+/* Grid System */
+.grid-3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+/* Utilities */
+.text-muted {
+    color: var(--text-muted);
+}
+
+.text-center {
+    text-align: center;
+}
+
+.mb-4 {
+    margin-bottom: var(--spacing-lg);
+}
+
+.mt-4 {
+    margin-top: var(--spacing-lg);
+}
+
+.flex {
+    display: flex;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.items-center {
+    align-items: center;
+}
+
+/* Dashboard Specific Helper */
+.dashboard-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    flex-wrap: wrap;
+}
+
+/* Chat Styling */
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 70vh;
+}
+
+.chat-messages {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: var(--spacing-md);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-md);
+}
+
+.message-user {
+    text-align: right;
+    margin-bottom: var(--spacing-md);
+}
+
+.message-user p {
+    display: inline-block;
+    background: var(--primary);
+    color: white;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-md);
+    border-bottom-right-radius: 0;
+}
+
+.message-bot {
+    text-align: left;
+    margin-bottom: var(--spacing-md);
+}
+
+.message-bot p {
+    display: inline-block;
+    background: var(--bg-body);
+    color: var(--text-main);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-md);
+    border-bottom-left-radius: 0;
+}
