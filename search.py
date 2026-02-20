@@ -18,4 +18,4 @@ def search():
             Content.body.ilike(f"%{query}%")
         ).all()
 
-    return render_template("search.html", results=results)
+    return render_template("search.html", results=results, query=request.form.get("query", ""))

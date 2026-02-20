@@ -1,18 +1,33 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card" style="max-width: 400px; margin: 40px auto;">
-    <h3 class="mb-4 text-center">Login</h3>
-    <form method="post">
-        <label for="email">Email</label>
-        <input name="email" id="email" type="email" placeholder="Enter your email" required class="mb-4">
+<div class="auth-wrapper">
+    <div class="auth-card card">
+        <h2>Welcome back</h2>
+        <p class="auth-subtitle">Sign in to your Vaulty</p>
 
-        <label for="password">Password</label>
-        <input name="password" id="password" type="password" placeholder="Enter your password" required class="mb-4">
+        <form method="post">
+            <div class="form-group">
+                <label for="email">
+                    <i data-lucide="mail" width="14" height="14"></i> Email
+                </label>
+                <input name="email" id="email" type="email" placeholder="you@example.com" required>
+            </div>
 
-        <button type="submit" class="btn" style="width: 100%;">Login</button>
-    </form>
-    <div class="text-center">
-        <small>Don't have an account? <a href="/signup">Sign up</a></small>
+            <div class="form-group">
+                <label for="password">
+                    <i data-lucide="lock" width="14" height="14"></i> Password
+                </label>
+                <input name="password" id="password" type="password" placeholder="••••••••" required>
+            </div>
+
+            <button type="submit" class="btn" style="width: 100%; padding: 0.75rem;">
+                <i data-lucide="log-in" width="16" height="16"></i> Sign In
+            </button>
+        </form>
+
+        <div class="auth-footer">
+            Don't have an account? <a href="/signup">Create one</a>
+        </div>
     </div>
 </div>
 {% endblock %}

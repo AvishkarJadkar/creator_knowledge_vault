@@ -4,35 +4,73 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Creator Knowledge Vault</title>
+  <meta name="description" content="Vaulty — Your AI-powered creative knowledge base">
+  <title>Vaulty</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 
 <body>
 
   <nav class="navbar">
-    <div class="nav-brand"> Creator Knowledge Vault</div>
+    <a href="/dashboard" class="nav-brand" style="text-decoration:none;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+        stroke="url(#brand-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <defs>
+          <linearGradient id="brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#7c3aed" />
+            <stop offset="100%" stop-color="#06b6d4" />
+          </linearGradient>
+        </defs>
+        <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+      </svg>
+      Vaulty
+    </a>
     <div class="nav-links">
       {% if session.get('user_id') %}
-      <a href="/dashboard">Dashboard</a>
-      <a href="/add">Add</a>
-      <a href="/search">Search</a>
-      <a href="/chat">Chat</a>
-      <a href="/logout" class="btn btn-sm btn-outline">Logout</a>
+      <a href="/dashboard"><i data-lucide="layout-dashboard" width="16" height="16"></i> <span>Dashboard</span></a>
+      <a href="/add"><i data-lucide="plus-circle" width="16" height="16"></i> <span>Add</span></a>
+      <a href="/search"><i data-lucide="search" width="16" height="16"></i> <span>Search</span></a>
+      <a href="/chat"><i data-lucide="message-circle" width="16" height="16"></i> <span>Chat</span></a>
+      <a href="/settings"><i data-lucide="settings" width="16" height="16"></i> <span>Settings</span></a>
+      <a href="/logout" class="btn btn-sm btn-outline"><i data-lucide="log-out" width="14" height="14"></i> Logout</a>
       {% else %}
-      <a href="/login">Login</a>
-      <a href="/signup">Signup</a>
+      <a href="/login"><i data-lucide="log-in" width="16" height="16"></i> <span>Login</span></a>
+      <a href="/signup"><i data-lucide="user-plus" width="16" height="16"></i> <span>Sign up</span></a>
       {% endif %}
     </div>
   </nav>
 
   <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-messages">
+      {% for category, message in messages %}
+      <div class="flash-msg {{ category }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
     {% block content %}{% endblock %}
   </main>
 
+  <footer class="site-footer">
+    Built with ✨ by <span>Vaulty</span>
+  </footer>
+
+  <script>
+    // Initialize Lucide icons
+    if (typeof lucide !== 'undefined') {
+      lucide.createIcons();
+    }
+  </script>
 </body>
 
 </html>

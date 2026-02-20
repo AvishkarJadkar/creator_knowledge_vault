@@ -1,31 +1,44 @@
 {% extends "base.html" %}
 {% block content %}
 <div style="max-width: 800px; margin: 0 auto;">
-  <div class="flex justify-between items-center mb-4">
-    <h3>Chat with your Vault</h3>
+
+  <div class="page-header">
+    <h2><i data-lucide="message-circle" width="24" height="24"></i> Chat with your Vault</h2>
+    <p>Ask questions and get AI-powered answers from your saved knowledge</p>
   </div>
 
-  <div class="card">
+  <div class="card" style="animation: fadeInUp 0.5s ease 0.1s both;">
     {% if answer %}
-    <div class="chat-display mb-4">
+    <div class="chat-container mb-4">
       <div class="message-user">
-        <small class="text-muted block mb-1">You</small>
+        <div class="msg-label">
+          <i data-lucide="user" width="12" height="12"></i> You
+        </div>
         <p>{{ request.form.get('question', '') }}</p>
       </div>
       <div class="message-bot">
-        <small class="text-muted block mb-1">Vault AI</small>
+        <div class="msg-label">
+          <i data-lucide="bot" width="12" height="12"></i> Vault AI
+        </div>
         <p>{{ answer|safe }}</p>
       </div>
     </div>
     <hr>
     {% endif %}
 
-    <form method="post">
-      <label for="question"><strong>Ask a question</strong></label>
-      <textarea name="question" id="question" rows="3" placeholder="Ex: What are my notes on productivity?" required
-        class="mb-4" style="resize: vertical;"></textarea>
-      <div class="text-right" style="text-align: right;">
-        <button type="submit" class="btn">Ask Question</button>
+    <form method="post" id="chat-form" style="margin-bottom: 0;">
+      <div class="form-group">
+        <label for="question">
+          <i data-lucide="help-circle" width="14" height="14"></i>
+          <strong>Ask a question</strong>
+        </label>
+        <div style="display: flex; gap: var(--spacing-sm);">
+          <input type="text" name="question" id="question" placeholder="Ask anything about your content..." required
+            autocomplete="off" style="flex: 1; margin: 0;">
+          <button type="submit" class="btn" style="white-space: nowrap;">
+            <i data-lucide="send" width="16" height="16"></i> Send
+          </button>
+        </div>
       </div>
     </form>
   </div>

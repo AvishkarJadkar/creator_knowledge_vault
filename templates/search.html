@@ -1,36 +1,75 @@
 {% extends "base.html" %}
 {% block content %}
 <div style="max-width: 800px; margin: 0 auto;">
-  <h3 class="mb-4">Search Vault</h3>
 
-  <div class="card mb-4" style="background-color: var(--bg-body); border: none; padding: 0;">
-    <form method="post" style="display: flex; gap: var(--spacing-sm); margin: 0;">
-      <input name="query" placeholder="Search your knowledge vault..." required style="margin: 0; flex-grow: 1;">
-      <button type="submit" class="btn"
-        style="width: auto; padding-left: 1.5rem; padding-right: 1.5rem;">Search</button>
+  <div class="search-hero">
+    <h2><i data-lucide="search" width="24" height="24" style="color: var(--primary);"></i> Search Vault</h2>
+    <p>Find anything across your entire knowledge base</p>
+
+    <form method="post" class="search-bar" style="margin-bottom: 0;">
+      <input name="query" placeholder="Search your knowledge vault..." required value="{{ query or '' }}">
+      <button type="submit" class="btn">
+        <i data-lucide="search" width="16" height="16"></i> Search
+      </button>
     </form>
   </div>
 
-  {% if results is defined %}
+  {% if results is defined and query %}
   <hr>
-  <h4 class="mb-4">Results</h4>
+  <div class="flex justify-between items-center mb-4" style="animation: fadeIn 0.4s ease both;">
+    <h4 style="display: flex; align-items: center; gap: 0.4rem;">
+      <i data-lucide="list" width="18" height="18" style="color: var(--primary);"></i>
+      Results for "<strong>{{ query }}</strong>"
+    </h4>
+    <span class="text-muted" style="font-size: 0.85rem;">{{ results|length }} found</span>
+  </div>
+
   <div class="grid-3">
     {% for c in results %}
+    {% set body_lower = c.body|lower %}
+    {% set query_lower = query|lower %}
+    {% set match_pos = body_lower.find(query_lower) %}
+    {% set snippet_start = [match_pos - 80, 0]|max %}
+    {% set snippet_end = [match_pos + query|length + 80, c.body|length]|min %}
+    {% set snippet = c.body[snippet_start:snippet_end] %}
+
     <div class="card" style="display: flex; flex-direction: column;">
-      <h4 style="margin-top: 0;">{{ c.title }}</h4>
-      <p style="flex-grow: 1;">{{ c.body[:150] }}...</p>
-      <hr style="margin: 1rem 0;">
-      <div class="flex justify-between items-center">
-        <span class="text-muted" style="font-size: 0.8rem;">{{ c.title }}</span>
-        <!-- Showing title as type or similar? Origin code showed title again in strong tag. Wait, origin line 14 was title. -->
-        <!-- checking original file, line 14 was c.title. line 20 in dashboard was content_type. search.html didn't show type. I'll add a 'View' button. -->
-        <a href="/content/{{ c.id }}" class="btn btn-sm btn-secondary">View Content</a>
+      <div class="flex justify-between items-center mb-4">
+        <h4 style="margin-top: 0; margin-bottom: 0;">{{ c.title }}</h4>
+        <span class="badge badge-{{ c.content_type if c.content_type else 'note' }}">{{ c.content_type if c.content_type
+          else 'note' }}</span>
       </div>
+
+      <div style="flex-grow: 1;">
+        <div class="search-snippet"
+          style="font-size: 0.88rem; line-height: 1.6; color: var(--text-muted); margin-bottom: 0.75rem; background: var(--bg-surface); padding: 0.6rem 0.75rem; border-radius: var(--radius-md); border-left: 3px solid var(--primary);">
+          <i data-lucide="quote" width="12" height="12" style="opacity: 0.5; margin-right: 0.25rem;"></i>
+          {% if snippet_start > 0 %}...{% endif %}{{ snippet }}{% if snippet_end < c.body|length %}...{% endif %} </div>
+        </div>
+
+        <hr style="margin: 0.5rem 0;">
+        <div class="flex justify-between items-center">
+          <small class="text-muted" style="font-size: 0.75rem;">{{ c.created_at }}</small>
+          <div class="flex" style="gap: 0.5rem;">
+            <a href="/remix/{{ c.id }}" class="btn btn-sm btn-outline">
+              <i data-lucide="sparkles" width="12" height="12"></i> Remix
+            </a>
+            <a href="/content/{{ c.id }}" class="btn btn-sm btn-secondary">
+              <i data-lucide="arrow-right" width="12" height="12"></i> View
+            </a>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="card empty-state">
+        <div class="empty-icon">
+          <i data-lucide="search-x" width="32" height="32"></i>
+        </div>
+        <h3>No results found</h3>
+        <p>Try adjusting your search terms or add more content to your vault.</p>
+      </div>
+      {% endfor %}
     </div>
-    {% else %}
-    <p class="text-muted">No results found.</p>
-    {% endfor %}
+    {% endif %}
   </div>
-  {% endif %}
-</div>
-{% endblock %}
+  {% endblock %}
