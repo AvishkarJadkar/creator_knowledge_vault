@@ -1,40 +1,83 @@
 {% extends "base.html" %}
-
 {% block content %}
 
-<div class="flex justify-between items-center mb-4">
-    <h3>Your Vault</h3>
-    <a href="/add" class="btn">Add Content</a>
+<div class="dashboard-header">
+    <div class="flex justify-between items-center">
+        <div>
+            <h2 id="greeting"></h2>
+            <p>{{ contents|length }} item{{ 's' if contents|length != 1 else '' }} in your vault</p>
+        </div>
+        <a href="/add" class="btn">
+            <i data-lucide="plus" width="16" height="16"></i> Add Content
+        </a>
+    </div>
 </div>
 
 <div class="grid-3">
     {% for c in contents %}
     <div class="card" style="display: flex; flex-direction: column;">
         <div class="flex justify-between items-center mb-4">
-            <h4 style="margin: 0; font-size: 1.1rem;">{{ c.title }}</h4>
-            <span class="text-muted" style="font-size: 0.75rem; text-transform: uppercase;">{{ c.content_type }}</span>
+            <h4 style="margin: 0; font-size: 1.05rem;">{{ c.title }}</h4>
+            <span class="badge badge-{{ c.content_type }}">{{ c.content_type }}</span>
         </div>
 
         <div style="flex-grow: 1;">
-            <p class="text-muted" style="margin-bottom: 1rem;">{{ c.body[:150] }}...</p>
+            <p class="text-muted" style="margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.6;">{{ c.body[:150]
+                }}...</p>
         </div>
 
-        <hr style="margin: 1rem 0;">
+        <hr style="margin: 0.75rem 0;">
 
         <div class="flex justify-between items-center">
-            <small class="text-muted">{{ c.created_at }}</small>
+            <small class="text-muted" style="font-size: 0.75rem;">{{ c.created_at }}</small>
             <div class="flex" style="gap: 0.5rem;">
-                <a href="/remix/{{ c.id }}" class="btn btn-sm btn-outline">Remix</a>
-                <a href="/content/{{ c.id }}" class="btn btn-sm btn-secondary">View</a>
+                <a href="/remix/{{ c.id }}" class="btn btn-sm btn-outline">
+                    <i data-lucide="sparkles" width="12" height="12"></i> Remix
+                </a>
+                <a href="/content/{{ c.id }}" class="btn btn-sm btn-secondary">
+                    <i data-lucide="eye" width="12" height="12"></i> View
+                </a>
             </div>
         </div>
     </div>
     {% else %}
-    <div class="card text-center" style="grid-column: 1 / -1;">
-        <p style="margin-bottom: 1rem;">Your vault is empty.</p>
-        <a href="/add" class="btn">Add your first note</a>
+    <div class="card empty-state">
+        <div class="empty-icon">
+            <i data-lucide="book-open" width="32" height="32"></i>
+        </div>
+        <h3>Your vault is empty</h3>
+        <p>Start building your knowledge base by adding your first piece of content.</p>
+        <a href="/add" class="btn">
+            <i data-lucide="plus" width="16" height="16"></i> Add your first note
+        </a>
     </div>
     {% endfor %}
 </div>
+
+<script>
+    (function () {
+        var name = "{{ session.get('user_name', 'Creator') }}";
+        var hour = new Date().getHours();
+        var timeGreet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+        var greetings = [
+            timeGreet + ", " + name + " 👋",
+            "Welcome back, " + name + " ✨",
+            "Hey " + name + "! Ready to create? 🚀",
+            "What's on your mind, " + name + "? 💡",
+            name + "'s Vault — Let's build something 🔥",
+            "Great to see you, " + name + "! 🎯",
+            "Hey " + name + ", let's get creative 🎨",
+            timeGreet + "! What will you create today, " + name + "? ✍️",
+            "Welcome to your vault, " + name + " 🏛️",
+            name + ", your ideas are waiting 💭",
+            "Back at it, " + name + "! Let's go 🏆",
+            "Hey " + name + "! Your vault missed you 📚",
+        ];
+
+        var greeting = greetings[Math.floor(Math.random() * greetings.length)];
+        document.getElementById("greeting").textContent = greeting;
+    })();
+</script>
 
 {% endblock %}

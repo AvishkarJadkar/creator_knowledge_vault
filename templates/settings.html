@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+
+    <div class="page-header">
+        <h2><i data-lucide="link" width="24" height="24"></i> Connected Profiles</h2>
+        <p>Link your social media to auto-detect and import new content</p>
+    </div>
+
+    <!-- Add New Profile -->
+    <div class="card mb-4" style="animation: fadeInUp 0.4s ease 0.1s both;">
+        <h4 style="margin-top: 0; display: flex; align-items: center; gap: 0.4rem;">
+            <i data-lucide="plus-circle" width="18" height="18" style="color: var(--primary);"></i>
+            Link a Profile
+        </h4>
+        <form method="post" action="/settings/add-profile">
+            <div class="flex" style="gap: var(--spacing-md); align-items: flex-end; flex-wrap: wrap;">
+                <div style="min-width: 160px;">
+                    <label for="platform"><i data-lucide="globe" width="14" height="14"></i> Platform</label>
+                    <select name="platform" id="platform" style="margin-bottom: 0;">
+                        <option value="youtube">🎬 YouTube</option>
+                        <option value="twitter">🐦 Twitter / X</option>
+                        <option value="linkedin">💼 LinkedIn</option>
+                        <option value="instagram">📸 Instagram</option>
+                    </select>
+                </div>
+                <div style="flex-grow: 1;">
+                    <label for="profile_url"><i data-lucide="link" width="14" height="14"></i> Profile URL</label>
+                    <input type="url" name="profile_url" id="profile_url"
+                        placeholder="https://www.youtube.com/@yourchannel" required style="margin-bottom: 0;">
+                </div>
+                <button type="submit" class="btn" style="white-space: nowrap;">
+                    <i data-lucide="link" width="16" height="16"></i> Connect
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Linked Profiles -->
+    {% if profiles %}
+    <div style="display: flex; flex-direction: column; gap: var(--spacing-md);">
+        {% for p in profiles %}
+        <div class="card" style="animation: fadeInUp 0.4s ease {{ 0.1 + loop.index * 0.05 }}s both;">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center" style="gap: var(--spacing-md);">
+                    <div style="width: 44px; height: 44px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
+            {% if p.platform == 'youtube' %}background: rgba(255,0,0,0.15);
+            {% elif p.platform == 'twitter' %}background: rgba(29,155,240,0.15);
+            {% elif p.platform == 'linkedin' %}background: rgba(0,119,181,0.15);
+            {% elif p.platform == 'instagram' %}background: rgba(225,48,108,0.15);
+            {% endif %}">
+                        {% if p.platform == 'youtube' %}🎬
+                        {% elif p.platform == 'twitter' %}🐦
+                        {% elif p.platform == 'linkedin' %}💼
+                        {% elif p.platform == 'instagram' %}📸
+                        {% endif %}
+                    </div>
+                    <div>
+                        <strong style="font-size: 1rem;">{{ p.platform|title }}</strong>
+                        <div class="text-muted" style="font-size: 0.82rem; word-break: break-all;">{{ p.profile_url }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center" style="gap: 0.5rem;">
+                    {% if p.platform == 'youtube' %}
+                    <form method="post" action="/settings/sync-youtube/{{ p.id }}" style="margin: 0;">
+                        <button type="submit" class="btn btn-sm btn-outline" title="Sync latest videos">
+                            <i data-lucide="refresh-cw" width="14" height="14"></i> Sync Now
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    <form method="post" action="/settings/remove-profile/{{ p.id }}" style="margin: 0;">
+                        <button type="submit" class="btn btn-sm"
+                            style="background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);"
+                            title="Remove profile">
+                            <i data-lucide="trash-2" width="14" height="14"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {% if p.platform == 'youtube' and p.last_synced_video %}
+            <div class="text-muted"
+                style="font-size: 0.78rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);">
+                <i data-lucide="check-circle" width="12" height="12" style="color: var(--success);"></i>
+                Last synced • Videos auto-imported to your vault
+            </div>
+            {% elif p.platform == 'youtube' %}
+            <div class="text-muted"
+                style="font-size: 0.78rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);">
+                <i data-lucide="info" width="12" height="12"></i>
+                Click "Sync Now" to import recent video transcripts
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card empty-state" style="animation: fadeInUp 0.5s ease 0.2s both;">
+        <div class="empty-icon">
+            <i data-lucide="unlink" width="32" height="32"></i>
+        </div>
+        <h3>No profiles linked yet</h3>
+        <p>Connect your YouTube channel to automatically import video transcripts into your vault.</p>
+    </div>
+    {% endif %}
+
+    <!-- Info Card -->
+    <div class="card"
+        style="margin-top: var(--spacing-lg); animation: fadeInUp 0.5s ease 0.3s both; border-left: 3px solid var(--primary);">
+        <h4 style="margin-top: 0; display: flex; align-items: center; gap: 0.4rem;">
+            <i data-lucide="info" width="16" height="16" style="color: var(--primary);"></i>
+            How it works
+        </h4>
+        <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.9rem; line-height: 1.8; color: var(--text-muted);">
+            <li><strong>YouTube:</strong> Click "Sync Now" to fetch transcripts from your latest videos and add them to
+                your vault automatically.</li>
+            <li><strong>Twitter, LinkedIn, Instagram:</strong> Profile links are saved for future auto-import support
+                (coming soon!).</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

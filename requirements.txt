@@ -2,10 +2,9 @@ flask
 flask_sqlalchemy
 werkzeug
 pypdf
-openai
-numpy
-google-generativeai
-numpy
 python-dotenv
 youtube-transcript-api
 yt-dlp
+groq
+feedparser
+gunicorn

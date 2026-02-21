@@ -2,13 +2,13 @@ from flask import Blueprint, render_template, request, session, redirect, url_fo
 from models import Content
 from dotenv import load_dotenv
 import os
-from google import genai
+from groq import Groq
 
 load_dotenv()
 
 chat_bp = Blueprint("chat", __name__)
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 @chat_bp.route("/chat", methods=["GET", "POST"])
 def chat():
@@ -27,35 +27,38 @@ def chat():
         
         contents = contents[:10]  # limit to last 10 items
         context = "\n\n".join(
-            f"Title: {c.title}\n{c.body}" for c in contents
+            f"Title: {c.title}\n{c.body[:500]}" for c in contents
         )
 
-        prompt = f"""
-            You are an assistant answering ONLY using the user's content.
+        prompt = f"""You are the personal AI assistant for a content creator. You have access to their saved knowledge vault below.
 
-            STRICT RULES:
-            - Do NOT use outside knowledge
-            - Do NOT hallucinate
-            - If unsure, say exactly: Not found in your vault.
+YOUR ROLE:
+- Study the creator's content carefully — understand their topics, writing style, tone, and perspective.
+- Answer the user's question using insights and themes from their vault content.
+- Match the creator's natural language and tone in your response.
+- If the question relates to a topic covered in the vault, draw from that content to give a thoughtful answer.
+- For general questions, you may use your general knowledge BUT frame the answer in a way that connects to the creator's interests and style.
+- NEVER make up facts about what the creator said or wrote. If you're using general knowledge, be transparent.
+- Keep answers concise and helpful.
 
-            CONTENT:
-            {context}
+CREATOR'S VAULT CONTENT:
+{context}
 
-            QUESTION:
-            {question}
+USER'S QUESTION:
+{question}
 
-            ANSWER:
-            """
+ANSWER (in the creator's tone and style):"""
 
         try:
-            response = client.models.generate_content(
-            model="models/gemini-2.5-flash",
-            contents=prompt,
-        )
-
-            answer = response.text
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=1024,
+            )
+            answer = response.choices[0].message.content
         except Exception as e:
-            answer = "Something went wrong. Try again."
+            answer = f"Something went wrong: {e}"
 
 
     return render_template("chat.html", answer=answer)
