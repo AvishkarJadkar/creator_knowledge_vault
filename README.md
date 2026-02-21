@@ -11,6 +11,7 @@ if you dont wanna go on site and check out the code, follow these steps -
 -python -m venv venv
 2.activate it
 - venv\Scripts\activate
+  
 3.add your API key (GROQ)
 4. install all the requirements
   - pip install -r requirements.txt
