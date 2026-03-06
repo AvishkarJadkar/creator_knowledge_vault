@@ -1,46 +1,600 @@
 {% extends "base.html" %}
 {% block content %}
-<div style="max-width: 800px; margin: 0 auto;">
-
-  <div class="page-header">
-    <h2><i data-lucide="message-circle" width="24" height="24"></i> Chat with your Vault</h2>
-    <p>Ask questions and get AI-powered answers from your saved knowledge</p>
-  </div>
-
-  <div class="card" style="animation: fadeInUp 0.5s ease 0.1s both;">
-    {% if answer %}
-    <div class="chat-container mb-4">
-      <div class="message-user">
-        <div class="msg-label">
-          <i data-lucide="user" width="12" height="12"></i> You
+<div class="chat-layout">
+  <!-- Sidebar -->
+  <aside class="chat-sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-action-item" id="new-chat-btn" title="Start a new conversation (Ctrl+Shift+O)">
+        <div class="sidebar-action-label">
+          <i data-lucide="square-pen" width="18" height="18"></i>
+          <span>New chat</span>
         </div>
-        <p>{{ request.form.get('question', '') }}</p>
-      </div>
-      <div class="message-bot">
-        <div class="msg-label">
-          <i data-lucide="bot" width="12" height="12"></i> Vault AI
-        </div>
-        <p>{{ answer|safe }}</p>
+        <span class="sidebar-shortcut">Ctrl+Shift+O</span>
       </div>
     </div>
-    <hr>
-    {% endif %}
 
-    <form method="post" id="chat-form" style="margin-bottom: 0;">
-      <div class="form-group">
-        <label for="question">
-          <i data-lucide="help-circle" width="14" height="14"></i>
-          <strong>Ask a question</strong>
-        </label>
-        <div style="display: flex; gap: var(--spacing-sm);">
-          <input type="text" name="question" id="question" placeholder="Ask anything about your content..." required
-            autocomplete="off" style="flex: 1; margin: 0;">
-          <button type="submit" class="btn" style="white-space: nowrap;">
-            <i data-lucide="send" width="16" height="16"></i> Send
+    <div class="sidebar-search-item" id="open-search-modal" title="Search chats (Ctrl+K)">
+      <i data-lucide="search" width="18" height="18"></i>
+      <span>Search chats</span>
+    </div>
+
+    <div class="session-list">
+      <div class="section-label">Your chats</div>
+      {% for sess in sessions %}
+      <div class="session-item {% if active_session and active_session.id == sess.id %}active{% endif %}">
+        <a href="{{ url_for('chat.chat', session_id=sess.id) }}" class="session-link">
+          <i data-lucide="message-square" width="14" height="14"></i>
+          <span class="session-title" {% if active_session and active_session.id==sess.id and messages|length==2
+            %}data-animate="true" {% endif %}>{{ sess.title }}</span>
+        </a>
+        <form action="{{ url_for('chat.delete_session', session_id=sess.id) }}" method="post"
+          class="delete-session-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn-icon-delete" title="Delete conversation">
+            <i data-lucide="trash-2" width="12" height="12"></i>
+          </button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+
+
+  </aside>
+
+  <!-- Main Chat Area -->
+  <main class="chat-main">
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="flash-messages">
+      {% for message in messages %}
+      <div class="flash-toast">
+        <i data-lucide="check-circle" width="16" height="16"></i>
+        <span>{{ message }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {% if active_session %}
+    <div class="chat-header">
+      <div class="chat-title-info">
+        <h3>{{ active_session.title }}</h3>
+        <span class="text-faint" style="font-size: 0.75rem;">Started {{
+          active_session.created_at.strftime('%Y-%m-%d') }}</span>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chat-messages">
+      {% if not messages %}
+      <div class="chat-empty-state" style="height: 100%; justify-content: center;">
+        <i data-lucide="sparkles" width="48" height="48"
+          style="color: var(--primary); opacity: 0.5; margin-bottom: 1rem;"></i>
+        <p class="text-muted">Start the conversation with your vault...</p>
+      </div>
+      {% endif %}
+      {% for msg in messages %}
+      <div class="message-wrapper {{ 'user-wrapper' if msg.role == 'user' else 'bot-wrapper' }}">
+        <div class="message-bubble {{ 'bubble-user' if msg.role == 'user' else 'bubble-bot' }}">
+          <div class="msg-content">{{ msg.content }}</div>
+          <div class="msg-meta">{{ msg.created_at.strftime('%H:%M') }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Floating Input Pill -->
+    <div class="chat-input-area">
+      <div class="chat-form" style="width: 100%; max-width: 850px;">
+        <div class="input-container">
+          <textarea name="question" placeholder="Ask anything, or say 'Remember that...'" required rows="1"
+            id="chat-input"></textarea>
+          <button type="button" class="btn-send" id="send-btn">
+            <i data-lucide="arrow-up" width="20" height="20"></i>
           </button>
         </div>
       </div>
-    </form>
+    </div>
+    {% else %}
+    <div class="chat-empty-state">
+      <div class="empty-icon-circular">
+        <i data-lucide="cpu" width="48" height="48"></i>
+      </div>
+      <h2 style="font-weight: 800; font-size: 2.25rem; margin-bottom: 0.5rem;">How can I help you today?</h2>
+      <p class="text-muted" style="font-size: 1.1rem; max-width: 500px;">Explore your knowledge vault, generate new
+        ideas, or ask the AI to remember important details.</p>
+      <div style="margin-top: 2.5rem;">
+        <button type="button" class="btn btn-lg" id="empty-new-chat-btn"
+          style="border-radius: var(--radius-xl); padding: 1rem 2rem;">
+          <i data-lucide="plus" width="20" height="20"></i> Start New Conversation
+        </button>
+      </div>
+    </div>
+    {% endif %}
+  </main>
+</div>
+
+<!-- Search Modal (must be before script so JS can find these elements) -->
+<div class="search-modal-overlay" id="search-modal-overlay">
+  <div class="search-modal">
+    <div class="search-modal-header">
+      <i data-lucide="search" width="20" height="20" style="color: var(--primary);"></i>
+      <div class="search-modal-input-wrapper">
+        <input type="text" class="search-modal-input" id="modal-search-input" placeholder="Search chats...">
+      </div>
+      <button class="search-modal-close" id="close-search-modal">
+        <i data-lucide="x" width="20" height="20"></i>
+      </button>
+    </div>
+
+    <div class="search-modal-content" id="modal-results-list">
+      <!-- New Chat Action -->
+      <a href="javascript:void(0)" class="search-modal-item action-primary" id="modal-new-chat">
+        <i data-lucide="square-pen" width="18" height="18"></i>
+        <span class="search-modal-item-title">New chat</span>
+      </a>
+
+      {% if grouped_sessions.today %}
+      <div class="search-modal-group-label">Today</div>
+      {% for sess in grouped_sessions.today %}
+      <a href="{{ url_for('chat.chat', session_id=sess.id) }}" class="search-modal-item chat-result">
+        <i data-lucide="message-circle" width="18" height="18"></i>
+        <span class="search-modal-item-title">{{ sess.title }}</span>
+      </a>
+      {% endfor %}
+      {% endif %}
+
+      {% if grouped_sessions.previous_7_days %}
+      <div class="search-modal-group-label">Previous 7 Days</div>
+      {% for sess in grouped_sessions.previous_7_days %}
+      <a href="{{ url_for('chat.chat', session_id=sess.id) }}" class="search-modal-item chat-result">
+        <i data-lucide="message-circle" width="18" height="18"></i>
+        <span class="search-modal-item-title">{{ sess.title }}</span>
+      </a>
+      {% endfor %}
+      {% endif %}
+
+      {% if grouped_sessions.older %}
+      <div class="search-modal-group-label">Older</div>
+      {% for sess in grouped_sessions.older %}
+      <a href="{{ url_for('chat.chat', session_id=sess.id) }}" class="search-modal-item chat-result">
+        <i data-lucide="message-circle" width="18" height="18"></i>
+        <span class="search-modal-item-title">{{ sess.title }}</span>
+      </a>
+      {% endfor %}
+      {% endif %}
+    </div>
   </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script>
+  // --- SECURITY: Get CSRF token for AJAX requests ---
+  const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+  // --- SECURITY: Safe markdown rendering with DOMPurify ---
+  function renderMarkdownSafe(text) {
+    const rawHtml = marked.parse(text || '');
+    return DOMPurify.sanitize(rawHtml);
+  }
+
+  // Render markdown in bot messages
+  document.querySelectorAll('.bubble-bot .msg-content').forEach(el => {
+    el.innerHTML = renderMarkdownSafe(el.textContent || '');
+  });
+
+  // Auto-scroll chat to bottom
+  function scrollToBottom() {
+    const container = document.getElementById('chat-messages');
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }
+  scrollToBottom();
+
+  // New Chat button — async, no page refresh feel
+  async function handleNewChat() {
+    const btn = document.getElementById('new-chat-btn');
+    const emptyBtn = document.getElementById('empty-new-chat-btn');
+    if (btn) btn.style.opacity = '0.5';
+    if (emptyBtn) emptyBtn.disabled = true;
+
+    try {
+      const res = await fetch('/chat/new', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      const data = await res.json();
+      if (data.url) {
+        // Smoothly update URL and state without reload
+        window.history.pushState({}, '', data.url);
+        window.location.reload(); // Still need reload to reset backend-rendered Jinja state easily for now, 
+        // but let's try a pure JS approach for a TRUE zero-reload if possible.
+        // Actually, for a TRUE zero-reload, we'd need to clear DOM and update SESSION_ID.
+        // Let's implement that.
+      }
+    } catch (e) {
+      if (btn) btn.style.opacity = '1';
+      if (emptyBtn) emptyBtn.disabled = false;
+    }
+  }
+
+  // Improved Zero-Reload New Chat
+  async function startNewChat() {
+    const btn = document.getElementById('new-chat-btn');
+    const emptyBtn = document.getElementById('empty-new-chat-btn');
+    if (btn) btn.style.opacity = '0.5';
+    if (emptyBtn) emptyBtn.disabled = true;
+
+    try {
+      const res = await fetch('/chat/new', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': CSRF_TOKEN
+        }
+      });
+      const data = await res.json();
+
+      if (data.session_id) {
+        // Update URL and Title instantly
+        window.history.pushState({ session_id: data.session_id }, '', data.url);
+
+        // If we're already on a chat page, just reset the UI instead of reloading
+        const messagesContainer = document.getElementById('chat-messages');
+        const chatHeader = document.querySelector('.chat-header h3');
+
+        if (messagesContainer && chatHeader) {
+          // Clear messages and set to empty state
+          messagesContainer.innerHTML = `
+            <div class="chat-empty-state" style="height: 100%; justify-content: center;">
+              <i data-lucide="sparkles" width="48" height="48" style="color: var(--primary); opacity: 0.5; margin-bottom: 1rem;"></i>
+              <p class="text-muted">Start the conversation with your vault...</p>
+            </div>`;
+          chatHeader.textContent = "New Chat";
+
+          // Update global SESSION_ID if it exists
+          if (typeof SESSION_ID !== 'undefined') {
+            window.SESSION_ID = data.session_id;
+            window.SEND_URL = "/chat/" + data.session_id + "/send";
+          }
+
+          // Update sidebar active state
+          document.querySelectorAll('.session-item').forEach(i => i.classList.remove('active'));
+
+          // Re-init icons
+          if (window.lucide) lucide.createIcons();
+
+          // Re-enable input if it was disabled
+          const chatInput = document.getElementById('chat-input');
+          if (chatInput) {
+            chatInput.value = '';
+            chatInput.focus();
+          }
+
+          if (btn) btn.style.opacity = '1';
+        } else {
+          // Fallback if we were on a different page (like dashboard)
+          window.location.href = data.url;
+        }
+      }
+    } catch (e) {
+      console.error("New chat error:", e);
+      if (btn) btn.style.opacity = '1';
+      if (emptyBtn) emptyBtn.disabled = false;
+    }
+  }
+
+  const newChatBtn = document.getElementById('new-chat-btn');
+  const emptyNewChatBtn = document.getElementById('empty-new-chat-btn');
+  if (newChatBtn) newChatBtn.addEventListener('click', startNewChat);
+  if (emptyNewChatBtn) emptyNewChatBtn.addEventListener('click', startNewChat);
+
+  // Keyboard shortcut Ctrl+Shift+O
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'o') {
+      e.preventDefault();
+      startNewChat();
+    }
+  });
+
+  {% if active_session %}
+  const SESSION_ID = {{ active_session.id }};
+  const SEND_URL = "/chat/" + SESSION_ID + "/send";
+
+  function getTimeNow() {
+    const now = new Date();
+    return now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+  }
+
+  function addMessage(role, content, time) {
+    const container = document.getElementById('chat-messages');
+    // Remove empty state if present
+    const emptyState = container.querySelector('.chat-empty-state');
+    if (emptyState) emptyState.remove();
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'message-wrapper ' + (role === 'user' ? 'user-wrapper' : 'bot-wrapper');
+
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble ' + (role === 'user' ? 'bubble-user' : 'bubble-bot');
+
+    const msgContent = document.createElement('div');
+    msgContent.className = 'msg-content';
+    if (role === 'assistant') {
+      msgContent.innerHTML = renderMarkdownSafe(content);
+    } else {
+      msgContent.textContent = content;
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.textContent = time;
+
+    bubble.appendChild(msgContent);
+    bubble.appendChild(meta);
+    wrapper.appendChild(bubble);
+    container.appendChild(wrapper);
+
+    // Animate in
+    wrapper.style.opacity = '0';
+    wrapper.style.transform = 'translateY(10px)';
+    requestAnimationFrame(() => {
+      wrapper.style.transition = 'opacity 0.3s, transform 0.3s';
+      wrapper.style.opacity = '1';
+      wrapper.style.transform = 'translateY(0)';
+    });
+
+    scrollToBottom();
+    return wrapper;
+  }
+
+  function addThinkingIndicator() {
+    const container = document.getElementById('chat-messages');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'message-wrapper bot-wrapper';
+    wrapper.id = 'thinking-indicator';
+    wrapper.innerHTML = `
+      <div class="message-bubble bubble-bot">
+        <div class="msg-content thinking-dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>`;
+    container.appendChild(wrapper);
+    scrollToBottom();
+  }
+
+  function removeThinkingIndicator() {
+    const el = document.getElementById('thinking-indicator');
+    if (el) el.remove();
+  }
+
+  function showToast(message) {
+    let container = document.querySelector('.flash-messages');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'flash-messages';
+      document.querySelector('.chat-main').prepend(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'flash-toast';
+    toast.innerHTML = `<span>${DOMPurify.sanitize(message)}</span>`;
+    container.appendChild(toast);
+    // Re-init lucide icons
+    if (window.lucide) lucide.createIcons();
+    setTimeout(() => toast.remove(), 5000);
+  }
+
+  function typeTitle(el, text) {
+    el.textContent = '';
+    el.classList.add('typing-cursor');
+    let i = 0;
+    const interval = setInterval(() => {
+      el.textContent += text[i];
+      i++;
+      if (i >= text.length) {
+        clearInterval(interval);
+        el.classList.remove('typing-cursor');
+      }
+    }, 50);
+  }
+
+  async function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+    const question = input.value.trim();
+    if (!question) return;
+
+    // Disable input
+    input.value = '';
+    input.style.height = '46px';
+    input.disabled = true;
+    sendBtn.disabled = true;
+
+    // Show user message instantly
+    addMessage('user', question, getTimeNow());
+
+    // Show thinking dots
+    addThinkingIndicator();
+
+    try {
+      const res = await fetch(SEND_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': CSRF_TOKEN
+        },
+        body: JSON.stringify({ question })
+      });
+
+      removeThinkingIndicator();
+
+      if (!res.ok) {
+        const err = await res.json();
+        addMessage('assistant', '⚠️ Error: ' + (err.error || 'Something went wrong'), getTimeNow());
+        return;
+      }
+
+      const data = await res.json();
+
+      // Show bot response
+      addMessage('assistant', data.answer, data.time);
+
+      // Update sidebar title if generated
+      if (data.new_title) {
+        const sidebarTitle = document.querySelector('.session-item.active .session-title');
+        const headerTitle = document.querySelector('.chat-header h3');
+        if (sidebarTitle) typeTitle(sidebarTitle, data.new_title);
+        if (headerTitle) headerTitle.textContent = data.new_title;
+      }
+
+      // Show memory toast if saved
+      if (data.memory_saved) {
+        showToast('✅ Saved to memory: ' + data.memory_saved);
+      }
+    } catch (e) {
+      removeThinkingIndicator();
+      addMessage('assistant', '⚠️ Network error. Please try again.', getTimeNow());
+    } finally {
+      input.disabled = false;
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+  // Send on button click
+  document.getElementById('send-btn').addEventListener('click', sendMessage);
+
+  // Auto-resize textarea + Enter to send
+  const chatInput = document.getElementById('chat-input');
+  if (chatInput) {
+    chatInput.addEventListener('input', function () {
+      this.style.height = '46px';
+      this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+    });
+
+    chatInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  }
+  {% endif %}
+
+  // Typing animation for newly generated chat titles (on initial page load)
+  const activeTitle = document.querySelector('.session-item.active .session-title');
+  if (activeTitle && activeTitle.dataset.animate === 'true') {
+    const fullText = activeTitle.textContent;
+    activeTitle.textContent = '';
+    activeTitle.classList.add('typing-cursor');
+    let i = 0;
+    const typeInterval = setInterval(() => {
+      activeTitle.textContent += fullText[i];
+      i++;
+      if (i >= fullText.length) {
+        clearInterval(typeInterval);
+        activeTitle.classList.remove('typing-cursor');
+      }
+    }, 50);
+  }
+
+  // Search Modal Logic
+  const searchModalOverlay = document.getElementById('search-modal-overlay');
+  const openSearchModalBtn = document.getElementById('open-search-modal');
+  const closeSearchModalBtn = document.getElementById('close-search-modal');
+  const modalSearchInput = document.getElementById('modal-search-input');
+  const modalResultsList = document.getElementById('modal-results-list');
+  const modalNewChatBtn = document.getElementById('modal-new-chat');
+
+  function openSearchModal() {
+    searchModalOverlay.classList.add('open');
+    modalSearchInput.focus();
+    // Re-init lucide icons for modal content
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function closeSearchModal() {
+    searchModalOverlay.classList.remove('open');
+    modalSearchInput.value = ''; // Clear search input
+    filterSearchResults(''); // Reset results
+  }
+
+  function filterSearchResults(query) {
+    const items = modalResultsList.querySelectorAll('.chat-result');
+    const newChatAction = modalResultsList.querySelector('.action-primary');
+    const groupLabels = modalResultsList.querySelectorAll('.search-modal-group-label');
+
+    let hasVisibleResults = false;
+
+    // Show/hide new chat action based on query
+    if (query.trim() === '') {
+      newChatAction.style.display = 'flex';
+    } else {
+      newChatAction.style.display = 'none';
+    }
+
+    items.forEach(item => {
+      const title = item.querySelector('.search-modal-item-title').textContent.toLowerCase();
+      if (title.includes(query.toLowerCase())) {
+        item.style.display = 'flex';
+        hasVisibleResults = true;
+      } else {
+        item.style.display = 'none';
+      }
+    });
+
+    // Hide group labels if all their children are hidden
+    groupLabels.forEach(label => {
+      let allChildrenHidden = true;
+      let nextSibling = label.nextElementSibling;
+      while (nextSibling && !nextSibling.classList.contains('search-modal-group-label')) {
+        if (nextSibling.classList.contains('chat-result') && nextSibling.style.display !== 'none') {
+          allChildrenHidden = false;
+          break;
+        }
+        nextSibling = nextSibling.nextElementSibling;
+      }
+      if (allChildrenHidden) {
+        label.style.display = 'none';
+      } else {
+        label.style.display = 'block';
+      }
+    });
+  }
+
+  openSearchModalBtn.addEventListener('click', openSearchModal);
+  closeSearchModalBtn.addEventListener('click', closeSearchModal);
+  searchModalOverlay.addEventListener('click', (e) => {
+    if (e.target === searchModalOverlay) {
+      closeSearchModal();
+    }
+  });
+
+  modalSearchInput.addEventListener('input', (e) => {
+    filterSearchResults(e.target.value);
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      if (searchModalOverlay.classList.contains('open')) {
+        closeSearchModal();
+      } else {
+        openSearchModal();
+      }
+    }
+    if (e.key === 'Escape' && searchModalOverlay.classList.contains('open')) {
+      closeSearchModal();
+    }
+  });
+
+  // Handle new chat action in modal
+  modalNewChatBtn.addEventListener('click', () => {
+    window.location.href = "{{ url_for('chat.new_chat') }}";
+  });
+</script>
 {% endblock %}
