@@ -2,7 +2,7 @@
 
 
 currently live on https://vaultyai.onrender.com
-(render.com makes the site sleep if there is no activity for 15 min so it will take 2 min to boot the site up. kindly wait for it :)))
+(render.com makes the site sleep if there is no activity for 15 min so it will take 2 min to boot the site up. kindly wait for it : P.S.- v2 is pushed on branch- experiments and its not live on render yet)))
 
 if you dont wanna go on site and check out the code, follow these steps - 
 
