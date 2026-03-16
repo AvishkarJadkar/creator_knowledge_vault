@@ -7,6 +7,7 @@ from models import SocialProfile, Content, Embedding
 from youtube_utils import get_youtube_transcript
 from ai import get_embedding
 import json
+from reddit_utils import RedditScraper, get_subreddit_name
 
 settings_bp = Blueprint("settings", __name__)
 
@@ -62,7 +63,7 @@ def add_profile():
     profile_url = request.form.get("profile_url", "").strip()
 
     # --- SECURITY: Validate platform against whitelist ---
-    allowed_platforms = {"youtube", "twitter", "linkedin", "instagram"}
+    allowed_platforms = {"youtube", "twitter", "linkedin", "instagram", "reddit"}
     if platform not in allowed_platforms:
         flash("Invalid platform selected", "error")
         return redirect(url_for("settings.settings"))
@@ -74,6 +75,10 @@ def add_profile():
     # --- SECURITY: Validate URL format and length ---
     if len(profile_url) > 500 or not profile_url.startswith("https://"):
         flash("Please enter a valid HTTPS profile URL", "error")
+        return redirect(url_for("settings.settings"))
+
+    if platform == "reddit" and not profile_url.startswith("https://www.reddit.com/r/"):
+        flash("Please enter a valid Subreddit URL (e.g., https://www.reddit.com/r/python)", "error")
         return redirect(url_for("settings.settings"))
 
     # Check for duplicate
@@ -214,5 +219,73 @@ def sync_youtube_channel(profile):
     if imported > 0:
         profile.last_synced_video = feed.entries[0].get("yt_videoid", "")
         db.session.commit()
+
+    return imported, ""
+
+
+@settings_bp.route("/settings/sync-reddit/<int:profile_id>", methods=["POST"])
+def sync_reddit(profile_id):
+    if "user_id" not in session:
+        return redirect(url_for("auth.login"))
+
+    profile = SocialProfile.query.get_or_404(profile_id)
+    if profile.user_id != session["user_id"] or profile.platform != "reddit":
+        return redirect(url_for("settings.settings"))
+
+    imported, errors = sync_reddit_subreddit(profile)
+    if imported > 0:
+        flash(f"Imported {imported} post(s) from Reddit!", "success")
+    elif errors:
+        flash(f"Sync issue: {errors}", "error")
+    else:
+        flash("No new posts found to import.", "")
+    return redirect(url_for("settings.settings"))
+
+
+def sync_reddit_subreddit(profile):
+    subreddit = get_subreddit_name(profile.profile_url)
+    if not subreddit:
+        return 0, "Could not identify subreddit from URL."
+
+    scraper = RedditScraper()
+    posts = scraper.fetch_subreddit_posts(subreddit, limit=5, category="hot")
+
+    if not posts:
+        return 0, f"No posts found in r/{subreddit}."
+
+    imported = 0
+    existing_titles = set(
+        c.title for c in Content.query.filter_by(user_id=profile.user_id).all()
+    )
+
+    for p in posts:
+        if p["title"] in existing_titles:
+            continue
+
+        details = scraper.scrape_post_details(p["permalink"])
+        if details:
+            content = Content(
+                user_id=profile.user_id,
+                title=details["title"],
+                body=details["body"],
+                content_type="reddit",
+            )
+            db.session.add(content)
+            db.session.commit()
+
+            try:
+                embedding = get_embedding(content.body)
+                if embedding:
+                    db.session.add(
+                        Embedding(
+                            content_id=content.id,
+                            vector=json.dumps(embedding)
+                        )
+                    )
+                    db.session.commit()
+            except Exception as e:
+                print(f"[Reddit Sync] Embedding failed for {details['title']}: {e}")
+
+            imported += 1
 
     return imported, ""
