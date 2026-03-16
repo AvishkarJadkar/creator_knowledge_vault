@@ -41,15 +41,23 @@
         </div>
     </div>
     {% else %}
-    <div class="card empty-state">
-        <div class="empty-icon">
-            <i data-lucide="book-open" width="32" height="32"></i>
+    <div class="card empty-state" style="padding: 3rem; text-align: center;">
+        <div class="empty-icon" style="margin-bottom: 1.5rem;">
+            <i data-lucide="sparkles" width="48" height="48" style="color: var(--primary); opacity: 0.8;"></i>
         </div>
-        <h3>Your vault is empty</h3>
-        <p>Start building your knowledge base by adding your first piece of content.</p>
-        <a href="/add" class="btn">
-            <i data-lucide="plus" width="16" height="16"></i> Add your first note
-        </a>
+        <h3 style="font-size: 1.8rem; margin-bottom: 1rem;">Your vault is ready!</h3>
+        <p class="text-muted" style="max-width: 500px; margin: 0 auto 2rem; line-height: 1.6;">
+            Start building your knowledge base. You can add content manually or connect your YouTube to auto-import your latest work.
+        </p>
+        
+        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+            <a href="/add" class="btn" style="padding: 0 2rem; height: 50px; display: flex; align-items: center; gap: 0.5rem; border-radius: 25px;">
+                <i data-lucide="plus" width="18" height="18"></i> Add Manually
+            </a>
+            <a href="/settings" class="btn btn-outline" style="padding: 0 2rem; height: 50px; display: flex; align-items: center; gap: 0.5rem; border-radius: 25px; border-color: var(--primary); color: var(--primary);">
+                <i data-lucide="youtube" width="18" height="18"></i> Connect Socials
+            </a>
+        </div>
     </div>
     {% endfor %}
 </div>

@@ -20,7 +20,6 @@
                     <label for="platform"><i data-lucide="globe" width="14" height="14"></i> Platform</label>
                     <select name="platform" id="platform" style="margin-bottom: 0;">
                         <option value="youtube">🎬 YouTube</option>
-                        <option value="reddit">🔴 Reddit</option>
                         <option value="twitter">🐦 Twitter / X</option>
                         <option value="linkedin">💼 LinkedIn</option>
                         <option value="instagram">📸 Instagram</option>
@@ -48,12 +47,10 @@
                     <div style="width: 44px; height: 44px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
             {% if p.platform == 'youtube' %}background: rgba(255,0,0,0.15);
             {% elif p.platform == 'twitter' %}background: rgba(29,155,240,0.15);
-            {% elif p.platform == 'reddit' %}background: rgba(255,69,0,0.15);
             {% elif p.platform == 'linkedin' %}background: rgba(0,119,181,0.15);
             {% elif p.platform == 'instagram' %}background: rgba(225,48,108,0.15);
             {% endif %}">
                         {% if p.platform == 'youtube' %}🎬
-                        {% elif p.platform == 'reddit' %}🔴
                         {% elif p.platform == 'twitter' %}🐦
                         {% elif p.platform == 'linkedin' %}💼
                         {% elif p.platform == 'instagram' %}📸
@@ -71,13 +68,6 @@
                     <form method="post" action="/settings/sync-youtube/{{ p.id }}" style="margin: 0;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm btn-outline" title="Sync latest videos">
-                            <i data-lucide="refresh-cw" width="14" height="14"></i> Sync Now
-                        </button>
-                    </form>
-                    {% elif p.platform == 'reddit' %}
-                    <form method="post" action="/settings/sync-reddit/{{ p.id }}" style="margin: 0;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-outline" title="Sync latest posts">
                             <i data-lucide="refresh-cw" width="14" height="14"></i> Sync Now
                         </button>
                     </form>
@@ -129,7 +119,6 @@
         </h4>
         <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.9rem; line-height: 1.8; color: var(--text-muted);">
             <li><strong>YouTube:</strong> Click "Sync Now" to fetch transcripts from your latest videos.</li>
-            <li><strong>Reddit:</strong> Click "Sync Now" to fetch the latest hot posts from your linked subreddit.</li>
             <li><strong>Twitter, LinkedIn, Instagram:</strong> Profile links are saved for future support.</li>
         </ul>
     </div>
@@ -139,9 +128,7 @@
     document.getElementById('platform').addEventListener('change', function() {
         const platform = this.value;
         const urlInput = document.getElementById('profile_url');
-        if (platform === 'reddit') {
-            urlInput.placeholder = 'https://www.reddit.com/r/python';
-        } else if (platform === 'youtube') {
+        if (platform === 'youtube') {
             urlInput.placeholder = 'https://www.youtube.com/@channel';
         } else if (platform === 'twitter') {
             urlInput.placeholder = 'https://x.com/username';
