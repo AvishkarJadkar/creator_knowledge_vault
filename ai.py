@@ -34,6 +34,8 @@ def cosine_similarity(v1, v2):
     if magnitude1 == 0 or magnitude2 == 0:
         return 0.0
         
+    return dot_product / (magnitude1 * magnitude2)
+        
 def generate_summary(text: str) -> str:
     """Synthesize a research report from multiple pieces of content."""
     if not text or not text.strip():

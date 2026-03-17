@@ -28,7 +28,7 @@ def search():
         
         if query_embedding:
             # Get all embeddings for this user
-            all_contents = Content.query.filter_by(user_id=session["user_id"]).all()
+            all_contents = Content.query.filter_by(user_id=session["user_id"], is_deleted=False).all()
             content_ids = [c.id for c in all_contents]
             
             embeddings = Embedding.query.filter(Embedding.content_id.in_(content_ids)).all()
@@ -55,8 +55,17 @@ def search():
             safe_query = query.replace("%", r"\%").replace("_", r"\_")
             results = Content.query.filter(
                 Content.user_id == session["user_id"],
-                Content.body.ilike(f"%{safe_query}%", escape="\\")
+                Content.is_deleted == False,
+                Content.body.ilike(f"%{safe_query}%")
             ).all()
+
+            # Also search by title if body search returned nothing
+            if not results:
+                results = Content.query.filter(
+                    Content.user_id == session["user_id"],
+                    Content.is_deleted == False,
+                    Content.title.ilike(f"%{safe_query}%")
+                ).all()
 
     # --- AJAX Response ---
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":

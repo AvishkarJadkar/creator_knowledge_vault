@@ -29,6 +29,10 @@ def search():
     # 1. Fetch search results
     results = provider.search(keyword, limit=5)
     
+    # Filter out results that are already in our vault and marked as deleted 
+    # (Actually explore results come from external providers, so we don't filter them against our DB 
+    # unless we check if they've been imported. Based on current code, explore doesn't check local DB.)
+    
     # 2. Synthesize with AI
     if results:
         combined_content = f"Topic: {keyword}\n\n"

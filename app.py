@@ -103,7 +103,7 @@ def set_security_headers(response):
 @app.route("/")
 def home():
     if "user_id" not in session:
-        return redirect(url_for("auth.login"))
+        return render_template("landing.html")
     return redirect(url_for("dashboard"))
 
 @app.route("/dashboard")
@@ -112,7 +112,8 @@ def dashboard():
         return redirect(url_for("auth.login"))
 
     contents = Content.query.filter_by(
-        user_id=session["user_id"]
+        user_id=session["user_id"],
+        is_deleted=False
     ).order_by(Content.created_at.desc()).all()
 
     return render_template("dashboard.html", contents=contents)
