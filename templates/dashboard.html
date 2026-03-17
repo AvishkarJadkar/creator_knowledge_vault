@@ -7,18 +7,36 @@
             <h2 id="greeting"></h2>
             <p>{{ contents|length }} item{{ 's' if contents|length != 1 else '' }} in your vault</p>
         </div>
-        <a href="/add" class="btn">
-            <i data-lucide="plus" width="16" height="16"></i> Add Content
-        </a>
+        <div class="flex items-center" style="gap: 1rem;">
+            {% if contents %}
+            <button onclick="deleteAll()" class="btn btn-outline text-danger" style="border-color: rgba(239, 68, 68, 0.5);">
+                <i data-lucide="trash" width="16" height="16"></i> Delete All
+            </button>
+            {% endif %}
+            <a href="/add" class="btn">
+                <i data-lucide="plus" width="16" height="16"></i> Add Content
+            </a>
+        </div>
     </div>
 </div>
 
-<div class="grid-3">
+<div class="grid-3" id="content-grid">
     {% for c in contents %}
-    <div class="card" style="display: flex; flex-direction: column;">
-        <div class="flex justify-between items-center mb-4">
+    <div class="card" id="card-{{ c.id }}" style="display: flex; flex-direction: column; position: relative;">
+        <!-- Delete Button -->
+        <button onclick="deleteContent({{ c.id }})" 
+                class="btn btn-sm btn-outline text-danger" 
+                style="position: absolute; top: 1rem; right: 1rem; padding: 0.25rem 0.5rem; border: none; background: transparent; cursor: pointer;"
+                title="Delete">
+            <i data-lucide="trash-2" width="16" height="16" stroke="CurrentColor" opacity="0.6"></i>
+        </button>
+
+        <div class="flex justify-between items-center mb-4" style="margin-right: 2rem;">
             <h4 style="margin: 0; font-size: 1.05rem;">{{ c.title }}</h4>
-            <span class="badge badge-{{ c.content_type }}">{{ c.content_type }}</span>
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+             <span class="badge badge-{{ c.content_type }}">{{ c.content_type }}</span>
         </div>
 
         <div style="flex-grow: 1;">
@@ -29,7 +47,7 @@
         <hr style="margin: 0.75rem 0;">
 
         <div class="flex justify-between items-center">
-            <small class="text-muted" style="font-size: 0.75rem;">{{ c.created_at }}</small>
+            <small class="text-muted" style="font-size: 0.75rem;">{{ c.created_at.strftime('%Y-%m-%d %H:%M') if c.created_at else '' }}</small>
             <div class="flex" style="gap: 0.5rem;">
                 <a href="/remix/{{ c.id }}" class="btn btn-sm btn-outline">
                     <i data-lucide="sparkles" width="12" height="12"></i> Remix
@@ -41,7 +59,7 @@
         </div>
     </div>
     {% else %}
-    <div class="card empty-state" style="padding: 3rem; text-align: center;">
+    <div class="card empty-state" id="empty-state" style="padding: 3rem; text-align: center;">
         <div class="empty-icon" style="margin-bottom: 1.5rem;">
             <i data-lucide="sparkles" width="48" height="48" style="color: var(--primary); opacity: 0.8;"></i>
         </div>
@@ -62,7 +80,11 @@
     {% endfor %}
 </div>
 
+<!-- Toast Notification Container -->
+<div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;"></div>
+
 <script>
+    // Greeting logic
     (function () {
         var name = "{{ session.get('user_name', 'Creator') }}";
         var hour = new Date().getHours();
@@ -84,8 +106,216 @@
         ];
 
         var greeting = greetings[Math.floor(Math.random() * greetings.length)];
-        document.getElementById("greeting").textContent = greeting;
+        var greetingEl = document.getElementById("greeting");
+        if(greetingEl) greetingEl.textContent = greeting;
     })();
+
+    // Undo / Redo Logic
+    let undoStack = [];
+    let redoStack = [];
+
+    function showToast(message) {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.style.background = '#333';
+        toast.style.color = '#fff';
+        toast.style.padding = '10px 20px';
+        toast.style.borderRadius = '5px';
+        toast.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        toast.textContent = message;
+        
+        container.appendChild(toast);
+        
+        // fade in
+        setTimeout(() => toast.style.opacity = '1', 10);
+        
+        // fade out and remove
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => {
+                if(toast.parentNode === container) container.removeChild(toast);
+            }, 300);
+        }, 3000);
+    }
+
+    async function deleteContent(id) {
+        try {
+            const res = await fetch(`/content/${id}/delete`, { method: 'POST' });
+            if (res.ok) {
+                const card = document.getElementById(`card-${id}`);
+                if (card) {
+                    card.style.display = 'none';
+                    undoStack.push(id);
+                    redoStack = []; // Clear redo stack on new action
+                    showToast('Item deleted. Press Ctrl+Z to undo.');
+                }
+            }
+        } catch (error) {
+            console.error('Delete failed:', error);
+            showToast('Failed to delete item.');
+        }
+    }
+
+    async function undoDelete() {
+        if (undoStack.length === 0) return;
+        
+        const id = undoStack.pop();
+        try {
+            const res = await fetch(`/content/${id}/restore`, { method: 'POST' });
+            if (res.ok) {
+                const card = document.getElementById(`card-${id}`);
+                if (card) {
+                    card.style.display = 'flex';
+                    redoStack.push(id);
+                    showToast('Undo successful. Item restored.');
+                }
+            } else {
+                undoStack.push(id); // revert the pop if failed
+            }
+        } catch (error) {
+            console.error('Undo failed:', error);
+            undoStack.push(id);
+        }
+    }
+
+    async function redoDelete() {
+        if (redoStack.length === 0) return;
+        
+        const id = redoStack.pop();
+        try {
+            const res = await fetch(`/content/${id}/delete`, { method: 'POST' });
+            if (res.ok) {
+                const card = document.getElementById(`card-${id}`);
+                if (card) {
+                    card.style.display = 'none';
+                    undoStack.push(id);
+                    showToast('Redo successful. Item deleted.');
+                }
+            } else {
+                redoStack.push(id); // revert the pop if failed
+            }
+        } catch (error) {
+            console.error('Redo failed:', error);
+            redoStack.push(id);
+        }
+    }
+
+    async function deleteAll() {
+        if (!confirm('Are you sure you want to delete all items?')) return;
+        
+        try {
+            const res = await fetch('/content/delete_all', { method: 'POST' });
+            if (res.ok) {
+                // Get all visible cards to store their IDs for undo
+                const visibleCards = Array.from(document.querySelectorAll('.card[id^="card-"]'))
+                    .filter(card => card.style.display !== 'none');
+                
+                const deletedIds = visibleCards.map(card => parseInt(card.id.replace('card-', '')));
+                
+                if (deletedIds.length > 0) {
+                    visibleCards.forEach(card => card.style.display = 'none');
+                    undoStack.push({ type: 'all', ids: deletedIds });
+                    redoStack = []; // Clear redo stack
+                    showToast(`${deletedIds.length} items deleted. Press Ctrl+Z to undo.`);
+                    
+                    // Show empty state
+                    const emptyState = document.getElementById('empty-state');
+                    if (emptyState) emptyState.style.display = 'block';
+                }
+            }
+        } catch (error) {
+            console.error('Delete all failed:', error);
+            showToast('Failed to delete all items.');
+        }
+    }
+
+    async function undoDeleteAll(action) {
+        try {
+            const res = await fetch('/content/restore_all', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content_ids: action.ids })
+            });
+            if (res.ok) {
+                action.ids.forEach(id => {
+                    const card = document.getElementById(`card-${id}`);
+                    if (card) card.style.display = 'flex';
+                });
+                redoStack.push(action);
+                showToast(`Undo successful. ${action.ids.length} items restored.`);
+                
+                // Hide empty state
+                const emptyState = document.getElementById('empty-state');
+                if (emptyState) emptyState.style.display = 'none';
+            } else {
+                undoStack.push(action);
+            }
+        } catch (error) {
+            console.error('Undo all failed:', error);
+            undoStack.push(action);
+        }
+    }
+
+    async function redoDeleteAll(action) {
+        try {
+            const res = await fetch('/content/delete_all', { method: 'POST' });
+            if (res.ok) {
+                action.ids.forEach(id => {
+                    const card = document.getElementById(`card-${id}`);
+                    if (card) card.style.display = 'none';
+                });
+                undoStack.push(action);
+                showToast(`Redo successful. ${action.ids.length} items deleted.`);
+                
+                // Show empty state
+                const emptyState = document.getElementById('empty-state');
+                if (emptyState) emptyState.style.display = 'block';
+            } else {
+                redoStack.push(action);
+            }
+        } catch (error) {
+            console.error('Redo all failed:', error);
+            redoStack.push(action);
+        }
+    }
+
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+Z (Undo)
+        if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+            e.preventDefault();
+            if (undoStack.length === 0) return;
+            
+            const lastAction = undoStack.pop();
+            if (typeof lastAction === 'object' && lastAction.type === 'all') {
+                undoDeleteAll(lastAction);
+            } else {
+                // Put it back and process as single if it's not 'all' (it's legacy pop logic now, but just in case)
+                // Need to wrap the ID based ID-pop to fit with the new object structure if desired, but backward compat:
+                if (typeof lastAction === 'number') {
+                     undoStack.push(lastAction);
+                     undoDelete(); // calling original undo function
+                }
+            }
+        }
+        // Ctrl+Y or Ctrl+Shift+Z (Redo)
+        if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'z')) {
+            e.preventDefault();
+            if (redoStack.length === 0) return;
+            
+            const lastAction = redoStack.pop();
+            if (typeof lastAction === 'object' && lastAction.type === 'all') {
+                redoDeleteAll(lastAction);
+            } else {
+                 if (typeof lastAction === 'number') {
+                     redoStack.push(lastAction);
+                     redoDelete();
+                 }
+            }
+        }
+    });
 </script>
 
 {% endblock %}
