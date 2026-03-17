@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for
+from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
 from models import Content
 from dotenv import load_dotenv
 import os
@@ -66,6 +66,8 @@ RULES:
 @remix_bp.route("/remix/<int:content_id>", methods=["GET", "POST"])
 def remix(content_id):
     if "user_id" not in session:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"error": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
 
     content = Content.query.get_or_404(content_id)
@@ -77,6 +79,8 @@ def remix(content_id):
 
         # --- SECURITY: Validate remix_type against whitelist ---
         if remix_type not in PROMPTS:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"error": "Invalid remix type selected."}), 400
             return render_template("remix.html", content=content, output="Invalid remix type selected.")
 
         prompt = f"""{PROMPTS[remix_type]}
@@ -101,5 +105,11 @@ YOUR OUTPUT (ready to copy-paste, no meta-commentary):"""
             # --- SECURITY: Don't expose internal errors ---
             print(f"Remix error: {e}")
             output = "Something went wrong while remixing. Please try again."
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"error": output}), 500
+
+        # --- AJAX Response ---
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"output": output})
 
     return render_template("remix.html", content=content, output=output)
