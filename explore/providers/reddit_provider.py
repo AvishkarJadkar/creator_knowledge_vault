@@ -1,5 +1,6 @@
 from . import BaseProvider, register_provider
 from reddit_utils import RedditScraper
+import html
 import logging
 
 @register_provider
@@ -67,7 +68,7 @@ class RedditProvider(BaseProvider):
                     "source": f"r/{p_data['subreddit']}",
                     "score": p_data.get("ups", 0),
                     "created_utc": p_data.get("created_utc"),
-                    "thumbnail": p_data.get("thumbnail") if p_data.get("thumbnail", "").startswith("http") else None,
+                    "thumbnail": self._get_best_thumbnail(p_data),
                     # Truncate preview for UI display
                     "summary": (full_body[:400] + "...") if len(full_body) > 400 else full_body,
                     "comments": comments
@@ -97,6 +98,34 @@ class RedditProvider(BaseProvider):
         except:
             pass
         return []
+
+    def _get_best_thumbnail(self, p_data: dict) -> str | None:
+        """Try to get the best available image: preview > thumbnail."""
+        # 1. Try Reddit's preview images (higher quality, more reliable)
+        try:
+            preview = p_data.get("preview", {})
+            images = preview.get("images", [])
+            if images:
+                # Get the source (full-res) image URL
+                source_url = images[0].get("source", {}).get("url", "")
+                if source_url.startswith("http"):
+                    # Reddit HTML-encodes preview URLs (&amp; instead of &)
+                    return html.unescape(source_url)
+                # Try resolutions (smaller previews) as fallback
+                resolutions = images[0].get("resolutions", [])
+                if resolutions:
+                    res_url = resolutions[-1].get("url", "")
+                    if res_url.startswith("http"):
+                        return html.unescape(res_url)
+        except (KeyError, IndexError, TypeError):
+            pass
+
+        # 2. Fall back to thumbnail
+        thumb = p_data.get("thumbnail", "")
+        if thumb.startswith("http"):
+            return thumb
+
+        return None
 
     def _format_comments(self, comments: list[dict]) -> str:
         return "\n".join([f"- {c['body']}" for c in comments])

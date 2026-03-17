@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for
+from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
 from .providers import PROVIDERS
 from ai import generate_summary
 
@@ -38,6 +38,15 @@ def search():
         summary = generate_summary(combined_content)
     else:
         summary = "No results found to summarize."
+
+    # --- AJAX Response ---
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({
+            "results": results,
+            "summary": summary,
+            "keyword": keyword,
+            "provider": provider_name
+        })
 
     return render_template(
         "explore.html", 

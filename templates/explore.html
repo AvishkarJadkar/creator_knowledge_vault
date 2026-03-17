@@ -9,14 +9,14 @@
         </h2>
         <p class="text-muted" style="font-size: 1.1rem;">Keyword-based topic discovery & AI research synthesis</p>
 
-        <form action="/explore/search" method="get" style="margin-top: 1.5rem; display: flex; gap: 0.8rem; max-width: 600px; margin: 1.5rem auto 0;">
+        <form id="explore-search-form" action="/explore/search" method="get" style="margin-top: 1.5rem; display: flex; gap: 0.8rem; max-width: 600px; margin: 1.5rem auto 0;">
             <div style="position: relative; flex-grow: 1;">
                 <i data-lucide="search" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); opacity: 0.6;" width="18" height="18"></i>
-                <input type="text" name="q" placeholder="What do you want to research today?" 
+                <input type="text" id="explore-search-input" name="q" placeholder="What do you want to research today?" 
                     value="{{ keyword or '' }}" required 
                     style="padding-left: 3rem; margin-bottom: 0; height: 50px; border-radius: 25px; border: 2px solid var(--border); background: var(--bg-card); transition: all 0.3s ease;">
             </div>
-            <button type="submit" class="btn" style="border-radius: 25px; padding: 0 1.5rem; height: 50px; display: flex; align-items: center; gap: 0.5rem; background: var(--primary); color: white; border: none; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);">
+            <button type="submit" id="explore-search-btn" class="btn" style="border-radius: 25px; padding: 0 1.5rem; height: 50px; display: flex; align-items: center; gap: 0.5rem; background: var(--primary); color: white; border: none; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);">
                 <i data-lucide="sparkles" width="18" height="18"></i> Research
             </button>
         </form>
@@ -33,109 +33,282 @@
         </div>
     </div>
 
-    {% if summary %}
-    <!-- AI Summary Section -->
-    <div class="card" style="border-left: 4px solid var(--primary); background: linear-gradient(to right, rgba(124, 58, 237, 0.05), transparent); margin-bottom: 2rem; animation: fadeInUp 0.5s ease both;">
-        <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; color: var(--primary);">
-            <i data-lucide="brain-circuit" width="24" height="24"></i>
-            <h3 style="margin: 0; font-weight: 700;">AI Research Summary: {{ keyword }}</h3>
-        </div>
-        <div class="summary-content" style="line-height: 1.7; color: var(--text); font-size: 1rem;">
-            {{ summary | safe | replace('\n', '<br>') }}
-        </div>
-    </div>
-    {% endif %}
-
-    {% if results %}
-    <!-- Results Header -->
-    <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
-        <h4 style="margin: 0; font-weight: 600;">Hottest Discussions on Reddit</h4>
-        <span class="text-muted" style="font-size: 0.85rem;">{{ results|length }} sources analyzed</span>
-    </div>
-
-    <!-- Results Grid -->
-    <div style="display: grid; grid-template-columns: 1fr; gap: 1.5rem;">
-        {% for r in results %}
-        <div class="card" style="padding: 1.5rem; transition: transform 0.2s ease; border: 1px solid var(--border);" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-            <div style="display: flex; gap: 1.2rem;">
-                {% if r.thumbnail %}
-                <img src="{{ r.thumbnail }}" style="width: 80px; height: 80px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: var(--bg-surface);">
-                {% else %}
-                <div style="width: 80px; height: 80px; border-radius: 12px; background: rgba(255, 69, 0, 0.1); display: flex; align-items: center; justify-content: center; font-size: 2rem; flex-shrink: 0;">
-                    🔴
-                </div>
-                {% endif %}
-                
-                <div style="flex-grow: 1;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.4rem;">
-                        <span style="font-size: 0.8rem; color: #ff4500; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ r.source }}</span>
-                        <span style="font-size: 0.8rem; color: var(--text-muted);"><i data-lucide="arrow-big-up" width="14" height="14" style="vertical-align: middle;"></i> {{ r.score }}</span>
-                    </div>
-                    <h4 style="margin: 0 0 0.8rem 0; font-size: 1.2rem; line-height: 1.4;">
-                        <a href="{{ r.url }}" target="_blank" style="text-decoration: none; color: var(--text); transition: color 0.2s;">{{ r.title }}</a>
-                    </h4>
-                    <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; margin-bottom: 1rem;">
-                        {{ r.summary[:300] }}{% if r.summary|length > 300 %}...{% endif %}
-                    </p>
-
-                    <!-- Comments Toggle -->
-                    {% if r.comments %}
-                    <details style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.8rem;">
-                        <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--primary); list-style: none; display: flex; align-items: center; gap: 0.4rem;">
-                            <i data-lucide="message-square" width="14" height="14"></i>
-                            View Top Comments ({{ r.comments|length }})
-                        </summary>
-                        <div style="margin-top: 0.8rem; display: flex; flex-direction: column; gap: 0.8rem;">
-                            {% for c in r.comments %}
-                            <div style="font-size: 0.88rem; line-height: 1.5; color: var(--text-muted); padding: 0.6rem 0.8rem; background: var(--bg-surface); border-radius: 8px; border-left: 2px solid var(--border);">
-                                <strong style="font-size: 0.75rem; display: block; margin-bottom: 0.2rem; color: var(--text);">u/{{ c.author }}</strong>
-                                {{ c.body }}
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </details>
-                    {% endif %}
-                </div>
+    <div id="explore-results-container">
+        {% if summary %}
+        <!-- AI Summary Section -->
+        <div class="card" style="border-left: 4px solid var(--primary); background: linear-gradient(to right, rgba(124, 58, 237, 0.05), transparent); margin-bottom: 2rem; animation: fadeInUp 0.5s ease both;">
+            <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; color: var(--primary);">
+                <i data-lucide="brain-circuit" width="24" height="24"></i>
+                <h3 style="margin: 0; font-weight: 700;">AI Research Summary: {{ keyword }}</h3>
+            </div>
+            <div class="summary-content" style="line-height: 1.7; color: var(--text); font-size: 1rem;">
+                {{ summary | safe | replace('\n', '<br>') }}
             </div>
         </div>
-        {% endfor %}
+        {% endif %}
+
+        {% if results %}
+        <!-- Results Header -->
+        <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+            <h4 style="margin: 0; font-weight: 600;">Hottest Discussions on Reddit</h4>
+            <span class="text-muted" style="font-size: 0.85rem;">{{ results|length }} sources analyzed</span>
+        </div>
+
+        <!-- Results Grid -->
+        <div style="display: grid; grid-template-columns: 1fr; gap: 1.5rem;">
+            {% for r in results %}
+            <div class="card" style="padding: 1.5rem; transition: transform 0.2s ease; border: 1px solid var(--border);" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                <div style="display: flex; gap: 1.2rem;">
+                    {% if r.thumbnail %}
+                    <img src="{{ r.thumbnail }}" style="width: 80px; height: 80px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: var(--bg-surface);" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" loading="lazy">
+                    <div style="width: 80px; height: 80px; border-radius: 12px; background: rgba(255, 69, 0, 0.1); display: none; align-items: center; justify-content: center; font-size: 2rem; flex-shrink: 0;">🔴</div>
+                    {% else %}
+                    <div style="width: 80px; height: 80px; border-radius: 12px; background: rgba(255, 69, 0, 0.1); display: flex; align-items: center; justify-content: center; font-size: 2rem; flex-shrink: 0;">
+                        🔴
+                    </div>
+                    {% endif %}
+                    
+                    <div style="flex-grow: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.4rem;">
+                            <span style="font-size: 0.8rem; color: #ff4500; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">{{ r.source }}</span>
+                            <span style="font-size: 0.8rem; color: var(--text-muted);"><i data-lucide="arrow-big-up" width="14" height="14" style="vertical-align: middle;"></i> {{ r.score }}</span>
+                        </div>
+                        <h4 style="margin: 0 0 0.8rem 0; font-size: 1.2rem; line-height: 1.4;">
+                            <a href="{{ r.url }}" target="_blank" style="text-decoration: none; color: var(--text); transition: color 0.2s;">{{ r.title }}</a>
+                        </h4>
+                        <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; margin-bottom: 1rem;">
+                            {{ r.summary[:300] }}{% if r.summary|length > 300 %}...{% endif %}
+                        </p>
+
+                        <!-- Comments Toggle -->
+                        {% if r.comments %}
+                        <details style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.8rem;">
+                            <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--primary); list-style: none; display: flex; align-items: center; gap: 0.4rem;">
+                                <i data-lucide="message-square" width="14" height="14"></i>
+                                View Top Comments ({{ r.comments|length }})
+                            </summary>
+                            <div style="margin-top: 0.8rem; display: flex; flex-direction: column; gap: 0.8rem;">
+                                {% for c in r.comments %}
+                                <div style="font-size: 0.88rem; line-height: 1.5; color: var(--text-muted); padding: 0.6rem 0.8rem; background: var(--bg-surface); border-radius: 8px; border-left: 2px solid var(--border);">
+                                    <strong style="font-size: 0.75rem; display: block; margin-bottom: 0.2rem; color: var(--text);">u/{{ c.author }}</strong>
+                                    {{ c.body }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </details>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% elif keyword %}
+        <div class="card empty-state">
+            <div class="empty-icon">
+                <i data-lucide="search-x" width="32" height="32"></i>
+            </div>
+            <h3>No insights found</h3>
+            <p>Try a different keyword or check your network connection.</p>
+        </div>
+        {% else %}
+        <!-- Initial State / Suggestions -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+            <div class="card" style="text-align: center; padding: 2rem; cursor: pointer; transition: all 0.3s;" onclick="fillAndSubmit('entrepreneurship')">
+                <div style="font-size: 2rem; margin-bottom: 1rem;">🚀</div>
+                <h4 style="margin: 0;">Entrepreneurship</h4>
+                <p class="text-muted" style="font-size: 0.85rem;">See what founders are discussing</p>
+            </div>
+            <div class="card" style="text-align: center; padding: 2rem; cursor: pointer; transition: all 0.3s;" onclick="fillAndSubmit('AI tools')">
+                <div style="font-size: 2rem; margin-bottom: 1rem;">🤖</div>
+                <h4 style="margin: 0;">AI Tools</h4>
+                <p class="text-muted" style="font-size: 0.85rem;">Discover new tech and workflows</p>
+            </div>
+            <div class="card" style="text-align: center; padding: 2rem; cursor: pointer; transition: all 0.3s;" onclick="fillAndSubmit('side hustles')">
+                <div style="font-size: 2rem; margin-bottom: 1rem;">💡</div>
+                <h4 style="margin: 0;">Side Hustles</h4>
+                <p class="text-muted" style="font-size: 0.85rem;">Explore creative income ideas</p>
+            </div>
+        </div>
+        {% endif %}
     </div>
-    {% elif keyword %}
-    <div class="card empty-state">
-        <div class="empty-icon">
-            <i data-lucide="search-x" width="32" height="32"></i>
-        </div>
-        <h3>No insights found</h3>
-        <p>Try a different keyword or check your network connection.</p>
-    </div>
-    {% else %}
-    <!-- Initial State / Suggestions -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
-        <div class="card" style="text-align: center; padding: 2rem; cursor: pointer; transition: all 0.3s;" onclick="location.href='/explore/search?q=entrepreneurship'">
-            <div style="font-size: 2rem; margin-bottom: 1rem;">🚀</div>
-            <h4 style="margin: 0;">Entrepreneurship</h4>
-            <p class="text-muted" style="font-size: 0.85rem;">See what founders are discussing</p>
-        </div>
-        <div class="card" style="text-align: center; padding: 2rem; cursor: pointer; transition: all 0.3s;" onclick="location.href='/explore/search?q=AI tools'">
-            <div style="font-size: 2rem; margin-bottom: 1rem;">🤖</div>
-            <h4 style="margin: 0;">AI Tools</h4>
-            <p class="text-muted" style="font-size: 0.85rem;">Discover new tech and workflows</p>
-        </div>
-        <div class="card" style="text-align: center; padding: 2rem; cursor: pointer; transition: all 0.3s;" onclick="location.href='/explore/search?q=side hustles'">
-            <div style="font-size: 2rem; margin-bottom: 1rem;">💡</div>
-            <h4 style="margin: 0;">Side Hustles</h4>
-            <p class="text-muted" style="font-size: 0.85rem;">Explore creative income ideas</p>
-        </div>
-    </div>
-    {% endif %}
 
 </div>
 
 <script>
     // Style adjustments for links on hover
-    document.querySelectorAll('h4 a').forEach(a => {
-        a.addEventListener('mouseover', () => a.style.color = 'var(--primary)');
-        a.addEventListener('mouseout', () => a.style.color = 'var(--text)');
+    function bindHoverEffects() {
+        document.querySelectorAll('h4 a').forEach(a => {
+            a.addEventListener('mouseover', () => a.style.color = 'var(--primary)');
+            a.addEventListener('mouseout', () => a.style.color = 'var(--text)');
+        });
+    }
+    bindHoverEffects();
+
+    function fillAndSubmit(query) {
+        document.getElementById('explore-search-input').value = query;
+        document.getElementById('explore-search-form').dispatchEvent(new Event('submit'));
+    }
+
+    // AJAX Form Handling
+    document.getElementById('explore-search-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const input = document.getElementById('explore-search-input');
+        const btn = document.getElementById('explore-search-btn');
+        const container = document.getElementById('explore-results-container');
+        const keyword = input.value.trim();
+        
+        if (!keyword) return;
+
+        // Show loading state
+        btn.innerHTML = `<i data-lucide="loader-2" class="spin" width="18" height="18"></i> Searching...`;
+        btn.style.opacity = '0.7';
+        btn.disabled = true;
+        
+        container.innerHTML = `
+            <div class="card empty-state" style="padding: 4rem 2rem; animation: pulse 2s infinite;">
+                <div class="empty-icon" style="background: transparent;">
+                    <i data-lucide="brain-circuit" width="48" height="48" style="color: var(--primary);"></i>
+                </div>
+                <h3>Researching "${keyword}"</h3>
+                <p>Analyzing discussions and synthesizing insights...</p>
+            </div>
+        `;
+        if (window.lucide) lucide.createIcons();
+
+        try {
+            // Include provider param if we add provider switching later
+            const url = `/explore/search?q=${encodeURIComponent(keyword)}&provider=reddit`;
+            
+            // Push URL state so back button works and URL is shareable
+            window.history.pushState({q: keyword}, '', url);
+            
+            const response = await vaulty.fetch(url);
+            const data = await response.json();
+            
+            // Rebuild DOM based on JSON
+            let html = '';
+            
+            if (data.summary) {
+                const summaryHtml = data.summary.replace(/\n/g, '<br>');
+                html += `
+                <div class="card" style="border-left: 4px solid var(--primary); background: linear-gradient(to right, rgba(124, 58, 237, 0.05), transparent); margin-bottom: 2rem; animation: fadeInUp 0.5s ease both;">
+                    <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; color: var(--primary);">
+                        <i data-lucide="brain-circuit" width="24" height="24"></i>
+                        <h3 style="margin: 0; font-weight: 700;">AI Research Summary: ${data.keyword}</h3>
+                    </div>
+                    <div class="summary-content" style="line-height: 1.7; color: var(--text); font-size: 1rem;">
+                        ${summaryHtml}
+                    </div>
+                </div>`;
+            }
+
+            if (data.results && data.results.length > 0) {
+                html += `
+                <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                    <h4 style="margin: 0; font-weight: 600;">Hottest Discussions on Reddit</h4>
+                    <span class="text-muted" style="font-size: 0.85rem;">${data.results.length} sources analyzed</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 1.5rem;">
+                `;
+                
+                data.results.forEach(r => {
+                    const thumbHtml = r.thumbnail 
+                        ? `<img src="${r.thumbnail}" style="width: 80px; height: 80px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: var(--bg-surface);" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" loading="lazy">
+                           <div style="width: 80px; height: 80px; border-radius: 12px; background: rgba(255, 69, 0, 0.1); display: none; align-items: center; justify-content: center; font-size: 2rem; flex-shrink: 0;">🔴</div>`
+                        : `<div style="width: 80px; height: 80px; border-radius: 12px; background: rgba(255, 69, 0, 0.1); display: flex; align-items: center; justify-content: center; font-size: 2rem; flex-shrink: 0;">🔴</div>`;
+                    
+                    const summaryTruncated = r.summary.length > 300 ? r.summary.substring(0, 300) + '...' : r.summary;
+                    
+                    let commentsHtml = '';
+                    if (r.comments && r.comments.length > 0) {
+                        commentsHtml = `
+                        <details style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.8rem;">
+                            <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--primary); list-style: none; display: flex; align-items: center; gap: 0.4rem;">
+                                <i data-lucide="message-square" width="14" height="14"></i>
+                                View Top Comments (${r.comments.length})
+                            </summary>
+                            <div style="margin-top: 0.8rem; display: flex; flex-direction: column; gap: 0.8rem;">
+                                ${r.comments.map(c => `
+                                <div style="font-size: 0.88rem; line-height: 1.5; color: var(--text-muted); padding: 0.6rem 0.8rem; background: var(--bg-surface); border-radius: 8px; border-left: 2px solid var(--border);">
+                                    <strong style="font-size: 0.75rem; display: block; margin-bottom: 0.2rem; color: var(--text);">u/${c.author}</strong>
+                                    ${c.body}
+                                </div>
+                                `).join('')}
+                            </div>
+                        </details>
+                        `;
+                    }
+
+                    html += `
+                    <div class="card" style="padding: 1.5rem; transition: transform 0.2s ease; border: 1px solid var(--border);" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                        <div style="display: flex; gap: 1.2rem;">
+                            ${thumbHtml}
+                            <div style="flex-grow: 1;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.4rem;">
+                                    <span style="font-size: 0.8rem; color: #ff4500; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">${r.source}</span>
+                                    <span style="font-size: 0.8rem; color: var(--text-muted);"><i data-lucide="arrow-big-up" width="14" height="14" style="vertical-align: middle;"></i> ${r.score}</span>
+                                </div>
+                                <h4 style="margin: 0 0 0.8rem 0; font-size: 1.2rem; line-height: 1.4;">
+                                    <a href="${r.url}" target="_blank" style="text-decoration: none; color: var(--text); transition: color 0.2s;">${r.title}</a>
+                                </h4>
+                                <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; margin-bottom: 1rem;">
+                                    ${summaryTruncated}
+                                </p>
+                                ${commentsHtml}
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                });
+                
+                html += `</div>`;
+            } else if (data.keyword) {
+                html = `
+                <div class="card empty-state">
+                    <div class="empty-icon">
+                        <i data-lucide="search-x" width="32" height="32"></i>
+                    </div>
+                    <h3>No insights found</h3>
+                    <p>Try a different keyword or check your network connection.</p>
+                </div>
+                `;
+            }
+            
+            container.innerHTML = html;
+            
+        } catch (e) {
+            console.error(e);
+            container.innerHTML = `
+                <div class="card empty-state" style="border-color: rgba(239, 68, 68, 0.3);">
+                    <div class="empty-icon text-error">
+                        <i data-lucide="alert-triangle" width="32" height="32" style="color: var(--error);"></i>
+                    </div>
+                    <h3>Something went wrong</h3>
+                    <p>Failed to generate research. Please try again.</p>
+                </div>
+            `;
+        } finally {
+            // Restore button
+            btn.innerHTML = `<i data-lucide="sparkles" width="18" height="18"></i> Research`;
+            btn.style.opacity = '1';
+            btn.disabled = false;
+            
+            // Re-bind hover & icons
+            bindHoverEffects();
+            if (window.lucide) lucide.createIcons();
+        }
+    });
+
+    // Handle back/forward navigation gracefully
+    window.addEventListener('popstate', function(event) {
+        if (event.state && event.state.q) {
+            document.getElementById('explore-search-input').value = event.state.q;
+            document.getElementById('explore-search-form').dispatchEvent(new Event('submit'));
+        } else {
+            // On root /explore, we'd theoretically reset, but for now a simple reload is safest
+            window.location.reload(); 
+        }
     });
 </script>
 

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for
+from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
 from models import Content, Embedding
 from ai import get_embedding, cosine_similarity
 import json
@@ -8,16 +8,21 @@ search_bp = Blueprint("search", __name__)
 @search_bp.route("/search", methods=["GET", "POST"])
 def search():
     if "user_id" not in session:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"error": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
 
     results = []
-    query = request.form.get("query", "").strip()
+    
+    # Handle both GET for direct links and POST for form submissions
+    query = request.form.get("query") if request.method == "POST" else request.args.get("q")
+    query = (query or "").strip()
 
     # --- SECURITY: Limit query length ---
     if len(query) > 500:
         query = query[:500]
 
-    if request.method == "POST" and query:
+    if query:
         # 1. Try Semantic Search FIRST
         query_embedding = get_embedding(query)
         
@@ -43,17 +48,27 @@ def search():
                 # Sort by score DESC
                 scored_results.sort(key=lambda x: x[0], reverse=True)
                 results = [item[1] for item in scored_results]
-                
-                # If we found semantic results, we can return them
-                if results:
-                    return render_template("search.html", results=results, query=query)
 
         # 2. Fallback to Keyword Search (if semantic search fails or returns nothing)
-        # --- SECURITY: Escape SQL wildcard characters to prevent injection ---
-        safe_query = query.replace("%", r"\%").replace("_", r"\_")
-        results = Content.query.filter(
-            Content.user_id == session["user_id"],
-            Content.body.ilike(f"%{safe_query}%", escape="\\")
-        ).all()
+        if not results:
+            # --- SECURITY: Escape SQL wildcard characters to prevent injection ---
+            safe_query = query.replace("%", r"\%").replace("_", r"\_")
+            results = Content.query.filter(
+                Content.user_id == session["user_id"],
+                Content.body.ilike(f"%{safe_query}%", escape="\\")
+            ).all()
+
+    # --- AJAX Response ---
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({
+            "results": [{
+                "id": c.id,
+                "title": c.title,
+                "body_snippet": c.body[:200] + "..." if len(c.body) > 200 else c.body,
+                "content_type": c.content_type,
+                "created_at": c.created_at.strftime("%b %d, %Y")
+            } for c in results],
+            "query": query
+        })
 
     return render_template("search.html", results=results, query=query)
