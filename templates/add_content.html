@@ -9,10 +9,12 @@
 
     <div class="card" style="animation: fadeInUp 0.5s ease 0.1s both;">
         <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <div class="form-group">
                 <label for="title"><i data-lucide="type" width="14" height="14"></i> Title</label>
-                <input name="title" id="title" placeholder="Give your content a descriptive title" required>
+                <input name="title" id="title" placeholder="Give your content a descriptive title" required
+                    maxlength="200">
             </div>
 
             <div class="form-group">
