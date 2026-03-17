@@ -3,8 +3,10 @@ import feedparser
 import urllib.request
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash
 from extensions import db
-from models import SocialProfile, Content
+from models import SocialProfile, Content, Embedding
 from youtube_utils import get_youtube_transcript
+from ai import get_embedding
+import json
 
 settings_bp = Blueprint("settings", __name__)
 
@@ -56,11 +58,22 @@ def add_profile():
     if "user_id" not in session:
         return redirect(url_for("auth.login"))
 
-    platform = request.form["platform"]
-    profile_url = request.form["profile_url"].strip()
+    platform = request.form.get("platform", "").strip()
+    profile_url = request.form.get("profile_url", "").strip()
+
+    # --- SECURITY: Validate platform against whitelist ---
+    allowed_platforms = {"youtube", "twitter", "linkedin", "instagram"}
+    if platform not in allowed_platforms:
+        flash("Invalid platform selected", "error")
+        return redirect(url_for("settings.settings"))
 
     if not profile_url:
         flash("Please enter a profile URL", "error")
+        return redirect(url_for("settings.settings"))
+
+    # --- SECURITY: Validate URL format and length ---
+    if len(profile_url) > 500 or not profile_url.startswith("https://"):
+        flash("Please enter a valid HTTPS profile URL", "error")
         return redirect(url_for("settings.settings"))
 
     # Check for duplicate
@@ -174,6 +187,22 @@ def sync_youtube_channel(profile):
                     content_type="youtube",
                 )
                 db.session.add(content)
+                db.session.commit() # Commit to get content.id
+
+                # Generate embedding
+                try:
+                    embedding = get_embedding(content.body)
+                    if embedding:
+                        db.session.add(
+                            Embedding(
+                                content_id=content.id,
+                                vector=json.dumps(embedding)
+                            )
+                        )
+                        db.session.commit()
+                except Exception as e:
+                    print(f"[Sync] Embedding failed for {title}: {e}")
+
                 imported += 1
                 print(f"[Sync] Imported: {title}")
             else:

@@ -6,25 +6,30 @@
         <p class="auth-subtitle">Start organizing your creator knowledge</p>
 
         <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="name">
                     <i data-lucide="user" width="14" height="14"></i> Your Name
                 </label>
-                <input name="name" id="name" type="text" placeholder="What should we call you?" required>
+                <input name="name" id="name" type="text" placeholder="What should we call you?" required
+                    maxlength="100">
             </div>
 
             <div class="form-group">
                 <label for="email">
                     <i data-lucide="mail" width="14" height="14"></i> Email
                 </label>
-                <input name="email" id="email" type="email" placeholder="you@example.com" required>
+                <input name="email" id="email" type="email" placeholder="you@example.com" required maxlength="120">
             </div>
 
             <div class="form-group">
                 <label for="password">
                     <i data-lucide="lock" width="14" height="14"></i> Password
                 </label>
-                <input name="password" id="password" type="password" placeholder="••••••••" required>
+                <input name="password" id="password" type="password"
+                    placeholder="Min 8 chars, uppercase, lowercase, number" required minlength="8">
+                <small style="color: var(--text-faint); font-size: 0.75rem;">Must be 8+ characters with uppercase,
+                    lowercase, and a number</small>
             </div>
 
             <button type="submit" class="btn" style="width: 100%; padding: 0.75rem;">

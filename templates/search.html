@@ -7,6 +7,7 @@
     <p>Find anything across your entire knowledge base</p>
 
     <form method="post" class="search-bar" style="margin-bottom: 0;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input name="query" placeholder="Search your knowledge vault..." required value="{{ query or '' }}">
       <button type="submit" class="btn">
         <i data-lucide="search" width="16" height="16"></i> Search
