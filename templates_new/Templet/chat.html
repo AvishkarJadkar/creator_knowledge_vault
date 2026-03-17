@@ -77,7 +77,7 @@
       <div class="message-wrapper {{ 'user-wrapper' if msg.role == 'user' else 'bot-wrapper' }}">
         <div class="message-bubble {{ 'bubble-user' if msg.role == 'user' else 'bubble-bot' }}">
           <div class="msg-content">{{ msg.content }}</div>
-          <div class="msg-meta" data-time="{{ msg.created_at.isoformat() }}Z">{{ msg.created_at.strftime('%H:%M') }}</div>
+          <div class="msg-meta">{{ msg.created_at.strftime('%H:%M') }}</div>
         </div>
       </div>
       {% endfor %}
@@ -193,14 +193,6 @@
   }
   scrollToBottom();
 
-  // Convert all UTC times from server to local browser time
-  document.querySelectorAll('.msg-meta[data-time]').forEach(el => {
-    try {
-      const date = new Date(el.getAttribute('data-time'));
-      el.textContent = date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
-    } catch(e) {}
-  });
-
   // New Chat button — async, no page refresh feel
   async function handleNewChat() {
     const btn = document.getElementById('new-chat-btn');
@@ -263,7 +255,7 @@
             </div>`;
           chatHeader.textContent = "New Chat";
 
-            // Update global SESSION_ID if it exists
+          // Update global SESSION_ID if it exists
           if (typeof SESSION_ID !== 'undefined') {
             window.SESSION_ID = data.session_id;
             window.SEND_URL = "/chat/" + data.session_id + "/send";
@@ -271,31 +263,6 @@
 
           // Update sidebar active state
           document.querySelectorAll('.session-item').forEach(i => i.classList.remove('active'));
-
-          // inject new session at the top of session list dynamically
-          const sessionList = document.querySelector('.session-list');
-          if (sessionList) {
-            const newItem = document.createElement('div');
-            newItem.className = 'session-item active';
-            newItem.innerHTML = `
-              <a href="/chat/${data.session_id}" class="session-link">
-                <i data-lucide="message-square" width="14" height="14"></i>
-                <span class="session-title">New Chat</span>
-              </a>
-              <form action="/chat/${data.session_id}/delete" method="post" class="delete-session-form">
-                <input type="hidden" name="csrf_token" value="${CSRF_TOKEN}">
-                <button type="submit" class="btn-icon-delete" title="Delete conversation">
-                  <i data-lucide="trash-2" width="12" height="12"></i>
-                </button>
-              </form>`;
-            // Insert right after the "Your chats" label
-            const label = sessionList.querySelector('.section-label');
-            if (label && label.nextSibling) {
-              sessionList.insertBefore(newItem, label.nextSibling);
-            } else {
-              sessionList.appendChild(newItem);
-            }
-          }
 
           // Re-init icons
           if (window.lucide) lucide.createIcons();
@@ -319,52 +286,6 @@
       if (emptyBtn) emptyBtn.disabled = false;
     }
   }
-
-  // Handle zero-refresh delete session
-  document.addEventListener('submit', async (e) => {
-    if (e.target && e.target.matches('.delete-session-form')) {
-      e.preventDefault();
-      const form = e.target;
-      const url = form.action;
-      const btn = form.querySelector('button');
-      
-      if (btn) btn.style.opacity = '0.5';
-
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRFToken': CSRF_TOKEN
-          }
-        });
-        
-        if (res.ok) {
-          const item = form.closest('.session-item');
-          const isActive = item.classList.contains('active');
-          
-          item.style.transition = 'all 0.3s ease-out';
-          item.style.opacity = '0';
-          item.style.transform = 'translateX(-20px)';
-          
-          setTimeout(() => {
-            item.remove();
-            // If we deleted the active chat, immediately start a new zero-refresh chat
-            if (isActive) {
-              startNewChat();
-            }
-          }, 300);
-          showToast('✅ Conversation deleted');
-        } else {
-          showToast('⚠️ Failed to delete conversation', 'error');
-          if (btn) btn.style.opacity = '1';
-        }
-      } catch (err) {
-        showToast('⚠️ Network error', 'error');
-        if (btn) btn.style.opacity = '1';
-      }
-    }
-  });
 
   const newChatBtn = document.getElementById('new-chat-btn');
   const emptyNewChatBtn = document.getElementById('empty-new-chat-btn');
@@ -519,7 +440,7 @@
       const data = await res.json();
 
       // Show bot response
-      addMessage('assistant', data.answer, getTimeNow());
+      addMessage('assistant', data.answer, data.time);
 
       // Update sidebar title if generated
       if (data.new_title) {

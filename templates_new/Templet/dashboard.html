@@ -114,49 +114,35 @@
     let undoStack = [];
     let redoStack = [];
 
-    function showToast(message, type = 'info') {
+    function showToast(message) {
         const container = document.getElementById('toast-container');
         const toast = document.createElement('div');
+        toast.style.background = '#333';
+        toast.style.color = '#fff';
+        toast.style.padding = '10px 20px';
+        toast.style.borderRadius = '5px';
+        toast.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        toast.textContent = message;
         
-        // Determine icon and accent color
-        const icons = { info: '🗑️', success: '✅', error: '❌' };
-        const accents = { info: 'rgba(139,92,246,0.6)', success: 'rgba(34,197,94,0.6)', error: 'rgba(239,68,68,0.6)' };
-        const icon = icons[type] || icons.info;
-        const accent = accents[type] || accents.info;
-
-        Object.assign(toast.style, {
-            display: 'flex', alignItems: 'center', gap: '8px',
-            background: 'rgba(20, 20, 30, 0.85)',
-            backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-            border: `1px solid ${accent}`,
-            color: '#e4e4e7', padding: '8px 14px',
-            borderRadius: '10px', fontSize: '0.8rem', fontFamily: 'Inter, sans-serif',
-            boxShadow: `0 4px 20px rgba(0,0,0,0.4), 0 0 8px ${accent}`,
-            transform: 'translateX(120%)', transition: 'transform 0.35s cubic-bezier(.4,0,.2,1), opacity 0.3s',
-            opacity: '0', maxWidth: '320px', lineHeight: '1.3',
-            whiteSpace: 'nowrap'
-        });
-
-        toast.innerHTML = `<span style="font-size:0.85rem">${icon}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis">${message}</span>`;
         container.appendChild(toast);
-
-        // slide in
-        requestAnimationFrame(() => {
-            toast.style.transform = 'translateX(0)';
-            toast.style.opacity = '1';
-        });
-
-        // slide out & remove
+        
+        // fade in
+        setTimeout(() => toast.style.opacity = '1', 10);
+        
+        // fade out and remove
         setTimeout(() => {
-            toast.style.transform = 'translateX(120%)';
             toast.style.opacity = '0';
-            setTimeout(() => { if (toast.parentNode) toast.remove(); }, 350);
-        }, 2500);
+            setTimeout(() => {
+                if(toast.parentNode === container) container.removeChild(toast);
+            }, 300);
+        }, 3000);
     }
 
     async function deleteContent(id) {
         try {
-            const res = await vaulty.fetch(`/content/${id}/delete`, { method: 'POST' });
+            const res = await fetch(`/content/${id}/delete`, { method: 'POST' });
             if (res.ok) {
                 const card = document.getElementById(`card-${id}`);
                 if (card) {
@@ -177,7 +163,7 @@
         
         const id = undoStack.pop();
         try {
-            const res = await vaulty.fetch(`/content/${id}/restore`, { method: 'POST' });
+            const res = await fetch(`/content/${id}/restore`, { method: 'POST' });
             if (res.ok) {
                 const card = document.getElementById(`card-${id}`);
                 if (card) {
@@ -199,7 +185,7 @@
         
         const id = redoStack.pop();
         try {
-            const res = await vaulty.fetch(`/content/${id}/delete`, { method: 'POST' });
+            const res = await fetch(`/content/${id}/delete`, { method: 'POST' });
             if (res.ok) {
                 const card = document.getElementById(`card-${id}`);
                 if (card) {
@@ -220,7 +206,7 @@
         if (!confirm('Are you sure you want to delete all items?')) return;
         
         try {
-            const res = await vaulty.fetch('/content/delete_all', { method: 'POST' });
+            const res = await fetch('/content/delete_all', { method: 'POST' });
             if (res.ok) {
                 // Get all visible cards to store their IDs for undo
                 const visibleCards = Array.from(document.querySelectorAll('.card[id^="card-"]'))
@@ -247,7 +233,7 @@
 
     async function undoDeleteAll(action) {
         try {
-            const res = await vaulty.fetch('/content/restore_all', { 
+            const res = await fetch('/content/restore_all', { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content_ids: action.ids })
@@ -274,7 +260,7 @@
 
     async function redoDeleteAll(action) {
         try {
-            const res = await vaulty.fetch('/content/delete_all', { method: 'POST' });
+            const res = await fetch('/content/delete_all', { method: 'POST' });
             if (res.ok) {
                 action.ids.forEach(id => {
                     const card = document.getElementById(`card-${id}`);

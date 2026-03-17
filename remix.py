@@ -70,7 +70,8 @@ def remix(content_id):
             return jsonify({"error": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
 
-    content = Content.query.get_or_404(content_id)
+    content = Content.query.filter_by(id=content_id, is_deleted=False).first_or_404()
+
 
     output = None
 

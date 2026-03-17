@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vaulty — Your AI Second Brain</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/scrollreveal"></script>
+    <style>
+        :root {
+            --bg: #030303;
+            --card-bg: #0a0a0a;
+            --accent: #8b5cf6;
+            --accent-pink: #d946ef;
+            --accent-blue: #0ea5e9;
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --border: rgba(255, 255, 255, 0.08);
+            --gradient-1: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);
+            --glass: rgba(255, 255, 255, 0.03);
+            --speed-fast: 0.3s;
+            --speed-normal: 0.6s;
+            --speed-slow: 1s;
+        }
+
+        @keyframes typewriter {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+
+        @keyframes blink {
+            50% { border-color: transparent; }
+        }
+
+        @keyframes orb-glow {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+
+        @keyframes rotate-border {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            line-height: 1.5;
+        }
+
+        h1, h2, h3, .logo {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        /* --- Scroll Progress Bar --- */
+        .scroll-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: var(--gradient-1);
+            z-index: 1000;
+            width: 0%;
+            transition: width 0.1s ease-out;
+            box-shadow: 0 0 10px var(--accent);
+        }
+
+
+
+        /* --- Animated Background --- */
+        .mesh-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 50%, #0d061a 0%, #030303 100%);
+        }
+
+        .mesh-gradient {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            background-image: 
+                radial-gradient(circle at 20% 30%, rgba(139, 92, 246, 0.2) 0%, transparent 40%),
+                radial-gradient(circle at 80% 70%, rgba(14, 165, 233, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 40% 80%, rgba(217, 70, 239, 0.1) 0%, transparent 40%),
+                radial-gradient(circle at 70% 20%, rgba(139, 92, 246, 0.1) 0%, transparent 40%);
+            filter: blur(80px);
+            animation: move-mesh 30s infinite alternate ease-in-out;
+        }
+
+        @keyframes move-mesh {
+            0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+            100% { transform: translate(10%, 10%) rotate(5deg) scale(1.1); }
+        }
+
+        /* --- Parallax Layers --- */
+        .parallax-layer {
+            position: absolute;
+            width: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* --- Layout --- */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        /* --- Navbar --- */
+        nav {
+            height: 80px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: var(--border);
+            position: sticky;
+            top: 0;
+            background: rgba(3, 3, 3, 0.8);
+            backdrop-filter: blur(20px);
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: var(--gradient-1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+            transform: translateY(-2px);
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--gradient-1);
+            transition: width 0.3s;
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        /* --- Hero --- */
+        .hero {
+            padding: 120px 0 80px;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-badges {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .badge-counter {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            padding: 0.5rem 1rem;
+            border-radius: 99px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.1);
+        }
+
+        .hero h1 {
+            font-size: 5.5rem;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+            line-height: 1;
+            margin-bottom: 2rem;
+            background: linear-gradient(to bottom, #fff 60%, rgba(255,255,255,0.4));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            position: relative;
+            display: inline-block;
+        }
+
+        .underline-svg {
+            position: absolute;
+            bottom: -15px;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            z-index: -1;
+        }
+
+        .hero p {
+            font-size: 1.35rem;
+            color: var(--text-secondary);
+            max-width: 650px;
+            margin: 0 auto 3.5rem;
+            line-height: 1.6;
+            min-height: 3.2em;
+        }
+
+        .typewriter-text {
+            border-right: 3px solid var(--accent);
+            white-space: nowrap;
+            overflow: hidden;
+            width: 0;
+        }
+
+        .cta-group {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 5rem;
+        }
+
+        .btn {
+            padding: 1rem 2.5rem;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            text-decoration: none;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: var(--text-primary);
+            color: var(--bg);
+            box-shadow: 0 10px 30px rgba(255,255,255,0.1);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(255,255,255,0.2);
+        }
+
+        .btn-secondary {
+            background: var(--glass);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.4);
+            transform: translateY(-5px);
+        }
+
+        /* --- CTA Gradient Border Effect --- */
+        .btn-glow {
+            position: relative;
+            z-index: 0;
+        }
+
+        .btn-glow::after {
+            content: '';
+            position: absolute;
+            z-index: -1;
+            top: -2px; left: -2px; right: -2px; bottom: -2px;
+            background: var(--gradient-1);
+            border-radius: 16px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .btn-glow:hover::after {
+            opacity: 1;
+            animation: rotate-border 3s linear infinite;
+        }
+
+        /* --- Vault Peek (Enhanced Parallax) --- */
+        .vault-peek {
+            margin: 0 auto;
+            max-width: 950px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 2rem;
+            box-shadow: 0 50px 100px rgba(0,0,0,0.6);
+            transform-style: preserve-3d;
+            transition: transform 0.2s ease-out;
+            perspective: 2000px;
+        }
+
+        .vault-content {
+            transform: translateZ(50px);
+        }
+
+        .mock-nav {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--border); }
+        .dot.red { background: #ff5f56; }
+        .dot.yellow { background: #ffbd2e; }
+        .dot.green { background: #27c93f; }
+
+        .mock-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+
+        .mock-card {
+            height: 160px;
+            background: var(--glass);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 1.5rem;
+            transition: transform 0.3s;
+        }
+
+        .mock-card:hover {
+            transform: translateZ(30px);
+            background: rgba(255,255,255,0.08);
+        }
+
+        .mock-line { height: 10px; background: var(--border); border-radius: 5px; margin-bottom: 1rem; width: 100%; }
+        .mock-line.short { width: 60%; }
+
+        /* --- Features Staggered --- */
+        .features {
+            padding: 160px 0;
+            position: relative;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2.5rem;
+        }
+
+        .feature-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            padding: 3rem;
+            border-radius: 32px;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .feature-card:hover {
+            border-color: rgba(139, 92, 246, 0.5);
+            transform: translateY(-15px);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5), 0 0 20px rgba(139, 92, 246, 0.1);
+        }
+
+        .feature-icon {
+            width: 72px;
+            height: 72px;
+            background: rgba(139, 92, 246, 0.1);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+            transition: all 0.4s;
+        }
+
+        .feature-card:hover .feature-icon {
+            background: var(--accent);
+            color: #fff;
+            transform: rotate(10deg);
+        }
+
+        /* --- Final CTA --- */
+        .footer-cta {
+            padding: 180px 0;
+            text-align: center;
+            background: radial-gradient(circle at center, rgba(139, 92, 246, 0.1) 0%, transparent 70%);
+        }
+
+        footer {
+            padding: 60px 0;
+            border-top: var(--border);
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 3.5rem; }
+            .nav-links { display: none; }
+            .mock-grid { grid-template-columns: 1fr; }
+            .vault-peek { width: 95%; }
+
+        }
+    </style>
+</head>
+<body>
+    <div class="scroll-progress" id="progressBar"></div>
+
+
+    <div class="mesh-container">
+        <div class="mesh-gradient"></div>
+    </div>
+
+    <nav>
+        <div class="container" style="display: flex; justify-content: space-between; width: 100%;">
+            <a href="/" class="logo" style="text-decoration: none;">
+                <i data-lucide="brain-circuit" width="28" height="28"></i>
+                Vaulty
+            </a>
+            <div class="nav-links">
+                {% if session.get('user_id') %}
+                    <a href="{{ url_for('dashboard') }}">My Dashboard</a>
+                    <a href="{{ url_for('auth.logout') }}">Sign Out</a>
+                {% else %}
+                    <a href="{{ url_for('auth.login') }}">Log In</a>
+                    <a href="{{ url_for('auth.signup') }}" class="btn btn-secondary" style="padding: 0.6rem 1.5rem;">Get Started</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-badges">
+                <div class="badge-counter">
+                    <i data-lucide="zap" width="16" height="16"></i>
+                    <span class="count" data-target="15000">0</span>+ Notes Saved
+                </div>
+                <div class="badge-counter">
+                    <i data-lucide="users" width="16" height="16"></i>
+                    <span class="count" data-target="2400">0</span>+ Creators
+                </div>
+            </div>
+            
+            <h1 id="heroTitle">Capture. Connect.<br>Create.</h1>
+            
+            <p id="heroPara"></p>
+            
+            <div class="cta-group">
+                {% if session.get('user_id') %}
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-glow">
+                        Access Your Vault <i data-lucide="arrow-right" width="20" height="20"></i>
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('auth.signup') }}" class="btn btn-primary btn-glow">
+                        Get Started Free <i data-lucide="arrow-right" width="20" height="20"></i>
+                    </a>
+                    <a href="{{ url_for('auth.login') }}" class="btn btn-secondary">
+                        View Demo
+                    </a>
+                {% endif %}
+            </div>
+
+            <!-- Vault Peek -->
+            <div class="vault-peek" id="vaultPeek">
+                <div class="vault-content">
+                    <div class="mock-nav">
+                        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+                        <div style="flex-grow: 1;"></div>
+                        <div class="mock-line" style="width: 120px; margin-bottom: 0;"></div>
+                    </div>
+                    <div class="mock-grid">
+                        <div class="mock-card card-animate">
+                            <div class="mock-line"></div>
+                            <div class="mock-line short"></div>
+                            <div class="mock-line" style="margin-top:20px; height:6px;"></div>
+                        </div>
+                        <div class="mock-card card-animate">
+                            <div class="mock-line"></div>
+                            <div class="mock-line short"></div>
+                            <div class="mock-line" style="margin-top:20px; height:6px;"></div>
+                        </div>
+                        <div class="mock-card card-animate">
+                            <div class="mock-line"></div>
+                            <div class="mock-line short"></div>
+                            <div class="mock-line" style="margin-top:20px; height:6px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features -->
+        <section class="features">
+            <div style="text-align:center; margin-bottom: 80px;">
+                <h2 style="font-size: 3.5rem; margin-bottom: 1rem;">Mind-Bending Features.</h2>
+                <p style="color: var(--text-secondary); font-size: 1.2rem;">Everything you need to turn chaos into creativity.</p>
+            </div>
+            <div class="feature-grid">
+                <div class="feature-card fs-left">
+                    <div class="feature-icon"><i data-lucide="database" width="32" height="32"></i></div>
+                    <h3>Omni-Capture</h3>
+                    <p>Save notes, web clips, PDFs, and videos. Our engine processes them all instantly for your future self.</p>
+                </div>
+                <div class="feature-card fs-bottom">
+                    <div class="feature-icon"><i data-lucide="sparkles" width="32" height="32"></i></div>
+                    <h3>AI Remix Engine</h3>
+                    <p>Turn your research into social posts, newsletters, or scripts with one click using our custom LLM logic.</p>
+                </div>
+                <div class="feature-card fs-right">
+                    <div class="feature-icon"><i data-lucide="share-2" width="32" height="32"></i></div>
+                    <h3>Neural Linking</h3>
+                    <p>Stop hunting for folders. Vaulty uses semantic relationships to show you how your ideas connect automatically.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Final CTA -->
+        <section class="footer-cta">
+            <h2 style="font-size: 4.5rem; margin-bottom: 2.5rem;">The Future of Thought is Here.</h2>
+            <a href="{{ url_for('auth.signup') if not session.get('user_id') else url_for('dashboard') }}" class="btn btn-primary" style="margin: 0 auto; padding: 1.5rem 3.5rem; font-size: 1.25rem;">
+                {{ 'Return to My Vault' if session.get('user_id') else 'Join the Waitlist — Free' }}
+            </a>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 Vaulty Inc. Designed for the curious.</p>
+        </div>
+    </footer>
+
+    <script>
+        lucide.createIcons();
+
+        // 1. Scroll Progress Bar
+        window.onscroll = function() {
+            let winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            let height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            let scrolled = (winScroll / height) * 100;
+            document.getElementById("progressBar").style.width = scrolled + "%";
+        };
+
+
+
+        // 3. Typewriter Effect
+        const headerPara = document.getElementById('heroPara');
+        const textToType = "Vaulty is your digital second brain. Capture everything, organize automatically, and remix with AI to create your best work faster than ever.";
+        let i = 0;
+        function typeWriter() {
+            if (i < textToType.length) {
+                headerPara.innerHTML += textToType.charAt(i);
+                i++;
+                setTimeout(typeWriter, 20);
+            }
+        }
+        window.onload = typeWriter;
+
+        // 4. Counter Animation
+        const counters = document.querySelectorAll('.count');
+        counters.forEach(counter => {
+            const updateCount = () => {
+                const target = +counter.getAttribute('data-target');
+                const count = +counter.innerText;
+                const inc = target / 200;
+                if (count < target) {
+                    counter.innerText = Math.ceil(count + inc);
+                    setTimeout(updateCount, 1);
+                } else {
+                    counter.innerText = target;
+                }
+            };
+            updateCount();
+        });
+
+        // 5. Vault Peek Parallax
+        const vaultPeek = document.getElementById('vaultPeek');
+        document.addEventListener('mousemove', (e) => {
+            const x = (window.innerWidth / 2 - e.clientX) / 25;
+            const y = (window.innerHeight / 2 - e.clientY) / 25;
+            vaultPeek.style.transform = `rotateY(${x}deg) rotateX(${y}deg)`;
+        });
+
+        // 6. Scroll Reveal Staggered
+        const sr = ScrollReveal({
+            distance: '60px',
+            duration: 1200,
+            delay: 400,
+            reset: false
+        });
+
+        sr.reveal('.fs-left', { origin: 'left', delay: 200 });
+        sr.reveal('.fs-bottom', { origin: 'bottom', delay: 400 });
+        sr.reveal('.fs-right', { origin: 'right', delay: 600 });
+        sr.reveal('.hero h1', { origin: 'top', delay: 200 });
+        sr.reveal('.cta-group', { origin: 'bottom', delay: 800 });
+    </script>
+</body>
+</html>

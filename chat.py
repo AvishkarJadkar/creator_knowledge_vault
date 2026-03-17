@@ -170,7 +170,7 @@ def send_message(session_id):
         query_embedding = get_embedding(question)
         if query_embedding:
             # Get user content
-            all_contents = Content.query.filter_by(user_id=session["user_id"]).all()
+            all_contents = Content.query.filter_by(user_id=session["user_id"], is_deleted=False).all()
             content_ids = [c.id for c in all_contents]
             content_map = {c.id: c for c in all_contents}
             
@@ -195,7 +195,7 @@ def send_message(session_id):
 
     # Fallback context if RAG fails or returns nothing
     if not context_parts:
-        contents = Content.query.filter_by(user_id=session["user_id"]).order_by(Content.created_at.desc()).limit(5).all()
+        contents = Content.query.filter_by(user_id=session["user_id"], is_deleted=False).order_by(Content.created_at.desc()).limit(5).all()
         context_parts = [f"Title: {c.title}\n{c.body[:500]}" for c in contents]
 
     context = "\n\n".join(context_parts)
@@ -283,27 +283,43 @@ def send_message(session_id):
 @chat_bp.route("/chat/<int:session_id>/delete", methods=["POST"])
 def delete_session(session_id):
     if "user_id" not in session:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"error": "Not logged in"}), 401
         return redirect(url_for("auth.login"))
         
     chat_sess = ChatSession.query.get_or_404(session_id)
     if chat_sess.user_id != session["user_id"]:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"error": "Unauthorized"}), 403
         return redirect(url_for("chat.chat"))
         
     db.session.delete(chat_sess)
     db.session.commit()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({"success": True})
+        
     flash("Conversation deleted", "success")
     return redirect(url_for("chat.chat"))
 
 @chat_bp.route("/chat/memory/<int:memory_id>/delete", methods=["POST"])
 def delete_memory(memory_id):
     if "user_id" not in session:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"error": "Not logged in"}), 401
         return redirect(url_for("auth.login"))
     
     mem = Memory.query.get_or_404(memory_id)
     if mem.user_id != session["user_id"]:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"error": "Unauthorized"}), 403
         return redirect(url_for("chat.chat"))
         
     db.session.delete(mem)
     db.session.commit()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({"success": True})
+        
     flash("Memory removed", "success")
     return redirect(url_for("chat.chat"))

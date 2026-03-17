@@ -112,13 +112,9 @@ document.getElementById('vault-search-form').addEventListener('submit', async fu
     urlParams.set('q', query);
     window.history.pushState({q: query}, '', window.location.pathname + '?' + urlParams.toString());
 
-    const response = await fetch('/search', {
+    const response = await vaulty.fetch('/search', {
       method: 'POST',
-      body: formData,
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-      }
+      body: formData
     });
     
     if (!response.ok) throw new Error('Search failed');

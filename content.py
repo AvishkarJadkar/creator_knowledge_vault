@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
 from extensions import db
 from models import Content
 from pypdf import PdfReader
@@ -125,9 +125,52 @@ def view_content(content_id):
     if "user_id" not in session:
         return redirect(url_for("auth.login"))
 
-    content = Content.query.get_or_404(content_id)
+    content = Content.query.filter_by(id=content_id, is_deleted=False).first_or_404()
 
     if content.user_id != session["user_id"]:
         return redirect(url_for("dashboard"))
 
     return render_template("view_content.html", content=content)
+
+@content_bp.route("/content/<int:content_id>/delete", methods=["POST"])
+def delete_content(content_id):
+    if "user_id" not in session:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    content = Content.query.filter_by(id=content_id, user_id=session["user_id"]).first_or_404()
+    content.is_deleted = True
+    db.session.commit()
+    return jsonify({"success": True})
+
+@content_bp.route("/content/<int:content_id>/restore", methods=["POST"])
+def restore_content(content_id):
+    if "user_id" not in session:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    content = Content.query.filter_by(id=content_id, user_id=session["user_id"]).first_or_404()
+    content.is_deleted = False
+    db.session.commit()
+    return jsonify({"success": True})
+
+@content_bp.route("/content/delete_all", methods=["POST"])
+def delete_all():
+    if "user_id" not in session:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    Content.query.filter_by(user_id=session["user_id"]).update({"is_deleted": True})
+    db.session.commit()
+    return jsonify({"success": True})
+
+@content_bp.route("/content/restore_all", methods=["POST"])
+def restore_all():
+    if "user_id" not in session:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+    
+    data = request.get_json()
+    if not data or "content_ids" not in data:
+        return jsonify({"success": False, "error": "Invalid request"}), 400
+    
+    content_ids = data["content_ids"]
+    Content.query.filter(Content.id.in_(content_ids), Content.user_id == session["user_id"]).update({"is_deleted": False}, synchronize_session=False)
+    db.session.commit()
+    return jsonify({"success": True})

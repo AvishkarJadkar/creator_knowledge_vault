@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vaulty — Your AI Second Brain</title>
+    <meta name="description" content="Capture everything, organize automatically, and remix with AI. Vaulty is the knowledge vault built for creators.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+
+        :root {
+            --bg: #050505;
+            --card: #0c0c0f;
+            --accent: #8b5cf6;
+            --accent-2: #d946ef;
+            --text: #f4f4f5;
+            --text-dim: #71717a;
+            --border: rgba(255,255,255,0.07);
+            --grad: linear-gradient(135deg, #8b5cf6, #d946ef);
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3 { font-family: 'Outfit', sans-serif; }
+
+        .bg-glow {
+            position: fixed; inset: 0; z-index: -1; overflow: hidden;
+            background: radial-gradient(ellipse at 50% 0%, rgba(139,92,246,0.12) 0%, transparent 60%),
+                        radial-gradient(ellipse at 80% 50%, rgba(217,70,239,0.06) 0%, transparent 50%);
+        }
+
+        /* --- Nav --- */
+        nav {
+            display: flex; justify-content: space-between; align-items: center;
+            max-width: 1100px; margin: 0 auto; padding: 1.25rem 1.5rem;
+        }
+        .logo {
+            font-family: 'Outfit', sans-serif; font-size: 1.4rem; font-weight: 800;
+            display: flex; align-items: center; gap: 0.5rem;
+            text-decoration: none;
+            background: var(--grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .nav-right { display: flex; align-items: center; gap: 1.5rem; }
+        .nav-right a { color: var(--text-dim); text-decoration: none; font-weight: 500; font-size: 0.9rem; transition: color 0.2s; }
+        .nav-right a:hover { color: var(--text); }
+
+        /* --- Buttons --- */
+        .btn-main {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.7rem 1.8rem; border-radius: 10px; font-weight: 700; font-size: 0.95rem;
+            text-decoration: none; transition: all 0.3s cubic-bezier(.4,0,.2,1); cursor: pointer; border: none;
+        }
+        .btn-white { background: #fff; color: #000; }
+        .btn-white:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(255,255,255,0.15); }
+        .btn-ghost {
+            background: transparent; color: var(--text-dim); border: 1px solid var(--border);
+            padding: 0.55rem 1.2rem; border-radius: 8px; font-weight: 500; font-size: 0.85rem;
+            text-decoration: none; transition: all 0.2s;
+        }
+        .btn-ghost:hover { border-color: rgba(255,255,255,0.3); color: var(--text); }
+
+        /* --- Hero --- */
+        .hero {
+            text-align: center; max-width: 800px; margin: 0 auto;
+            padding: 5rem 1.5rem 3rem;
+        }
+        .hero-tag {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2);
+            padding: 0.3rem 0.8rem; border-radius: 99px; font-size: 0.75rem; font-weight: 600;
+            color: var(--accent); margin-bottom: 1.5rem;
+        }
+        .hero h1 {
+            font-size: clamp(2.8rem, 7vw, 4.5rem); font-weight: 800; line-height: 1.05;
+            letter-spacing: -0.04em; margin-bottom: 1.2rem;
+        }
+        .hero h1 .grad {
+            background: var(--grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .hero p {
+            font-size: 1.1rem; color: var(--text-dim); max-width: 550px; margin: 0 auto 2rem; line-height: 1.6;
+        }
+
+        /* --- Emoji Hover Words --- */
+        .emoji-word {
+            position: relative;
+            display: inline-block;
+            cursor: default;
+            transition: transform 0.25s ease;
+        }
+        .emoji-word:hover {
+            transform: scale(1.04);
+        }
+        .emoji-float {
+            position: absolute;
+            left: 50%; top: 50%;
+            font-size: 1.3rem;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 10;
+            will-change: transform, opacity;
+        }
+        .emoji-word:hover .emoji-float {
+            animation: emojiDrift 1s ease-out forwards;
+        }
+
+        @keyframes emojiDrift {
+            0%   { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); }
+            20%  { opacity: 1; transform: translate(calc(-50% + var(--tx) * 0.4), calc(-50% + var(--ty) * 0.4)) scale(1.1) rotate(calc(var(--rot) * 0.5)); }
+            60%  { opacity: 0.9; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1) rotate(var(--rot)); }
+            100% { opacity: 0; transform: translate(calc(-50% + var(--tx) * 1.15), calc(-50% + var(--ty) * 1.15)) scale(0.85) rotate(var(--rot)); }
+        }
+
+        /* Emojis float sideways and DOWN only — never upward into the tag */
+        .emoji-float:nth-child(1) { --tx: -55px; --ty: 15px;  --rot: -12deg; animation-delay: 0s; }
+        .emoji-float:nth-child(2) { --tx: 50px;  --ty: 12px;  --rot: 10deg;  animation-delay: 0.07s; }
+        .emoji-float:nth-child(3) { --tx: -30px; --ty: 45px;  --rot: -6deg;  animation-delay: 0.14s; }
+        .emoji-float:nth-child(4) { --tx: 40px;  --ty: 42px;  --rot: 14deg;  animation-delay: 0.1s; }
+
+        /* --- Features --- */
+        .features {
+            max-width: 1100px; margin: 0 auto; padding: 3rem 1.5rem 4rem;
+        }
+        .features-header { text-align: center; margin-bottom: 2.5rem; }
+        .features-header h2 { font-size: 2.2rem; margin-bottom: 0.5rem; }
+        .features-header p { color: var(--text-dim); font-size: 1rem; }
+        .feat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem; }
+        .feat {
+            background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+            padding: 2rem; transition: all 0.3s;
+        }
+        .feat:hover { border-color: rgba(139,92,246,0.4); transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+        .feat-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            background: rgba(139,92,246,0.1); display: flex; align-items: center; justify-content: center;
+            color: var(--accent); margin-bottom: 1rem; transition: all 0.3s;
+        }
+        .feat:hover .feat-icon { background: var(--accent); color: #fff; }
+        .feat h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+        .feat p { font-size: 0.9rem; color: var(--text-dim); line-height: 1.5; }
+
+        /* --- CTA --- */
+        .cta {
+            text-align: center; padding: 4rem 1.5rem 3rem;
+            background: radial-gradient(circle at 50% 50%, rgba(139,92,246,0.08) 0%, transparent 60%);
+        }
+        .cta h2 { font-size: 2.5rem; margin-bottom: 1.5rem; }
+
+        footer {
+            text-align: center; padding: 2rem 1.5rem; color: var(--text-dim); font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+        }
+
+        @media (max-width: 640px) {
+            .nav-right a:not(.btn-ghost) { display: none; }
+            .emoji-float { font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-glow"></div>
+
+    <nav>
+        <a href="/" class="logo">
+            <i data-lucide="brain-circuit" width="24" height="24"></i>Vaulty
+        </a>
+        <div class="nav-right">
+            <a href="{{ url_for('auth.login') }}">Log In</a>
+            <a href="{{ url_for('auth.signup') }}" class="btn-ghost">Sign Up</a>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-tag"><i data-lucide="zap" width="12" height="12"></i> AI-Powered Knowledge Vault</div>
+        <h1>
+            <span class="emoji-word">Capture</span>.
+            <span class="emoji-word"><span class="grad">Connect</span></span>.<br>
+            <span class="emoji-word">Create</span>.
+        </h1>
+        <p>Your digital second brain. Save notes, PDFs, and videos — then remix them into social posts, summaries, and ideas with AI.</p>
+        <a href="{{ url_for('auth.signup') }}" class="btn-main btn-white">
+            Get Started <i data-lucide="arrow-right" width="18" height="18"></i>
+        </a>
+    </section>
+
+    <!-- Features -->
+    <section class="features">
+        <div class="features-header">
+            <h2>Everything You Need</h2>
+            <p>Built for creators who think fast and ship faster.</p>
+        </div>
+        <div class="feat-grid">
+            <div class="feat">
+                <div class="feat-icon"><i data-lucide="database" width="24" height="24"></i></div>
+                <h3>Omni-Capture</h3>
+                <p>Save notes, web clips, PDFs, and YouTube videos. We process them all instantly.</p>
+            </div>
+            <div class="feat">
+                <div class="feat-icon"><i data-lucide="sparkles" width="24" height="24"></i></div>
+                <h3>AI Remix Engine</h3>
+                <p>Turn research into Twitter threads, LinkedIn posts, or summaries with one click.</p>
+            </div>
+            <div class="feat">
+                <div class="feat-icon"><i data-lucide="message-circle" width="24" height="24"></i></div>
+                <h3>Chat With Your Vault</h3>
+                <p>Ask questions about your own content. Get answers grounded in your knowledge base.</p>
+            </div>
+            <div class="feat">
+                <div class="feat-icon"><i data-lucide="search" width="24" height="24"></i></div>
+                <h3>Semantic Search</h3>
+                <p>Find ideas by meaning, not just keywords. Our AI understands what you're looking for.</p>
+            </div>
+            <div class="feat">
+                <div class="feat-icon"><i data-lucide="compass" width="24" height="24"></i></div>
+                <h3>Explore Ideas</h3>
+                <p>Discover trending content from Reddit and get AI-powered summaries on any topic.</p>
+            </div>
+            <div class="feat">
+                <div class="feat-icon"><i data-lucide="youtube" width="24" height="24"></i></div>
+                <h3>Social Sync</h3>
+                <p>Connect your YouTube channel and auto-import video transcripts into your vault.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta">
+        <h2>Start Building Your Vault</h2>
+        <a href="{{ url_for('auth.signup') }}" class="btn-main btn-white">
+            Create Free Account <i data-lucide="arrow-right" width="18" height="18"></i>
+        </a>
+    </section>
+
+    <footer>&copy; 2026 Vaulty. Built for creators.</footer>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
