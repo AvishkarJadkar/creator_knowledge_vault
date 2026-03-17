@@ -38,6 +38,7 @@
       <a href="/dashboard"><i data-lucide="layout-dashboard" width="16" height="16"></i> <span>Dashboard</span></a>
       <a href="/add"><i data-lucide="plus-circle" width="16" height="16"></i> <span>Add</span></a>
       <a href="/search"><i data-lucide="search" width="16" height="16"></i> <span>Search</span></a>
+      <a href="/explore"><i data-lucide="compass" width="16" height="16"></i> <span>Explore Ideas</span></a>
       <a href="/chat"><i data-lucide="message-circle" width="16" height="16"></i> <span>Chat</span></a>
       <a href="/settings"><i data-lucide="settings" width="16" height="16"></i> <span>Settings</span></a>
       <a href="/logout" class="btn btn-sm btn-outline"><i data-lucide="log-out" width="14" height="14"></i> Logout</a>
@@ -71,6 +72,46 @@
     if (typeof lucide !== 'undefined') {
       lucide.createIcons();
     }
+
+    // Shared Client-Side Utilities for AJAX
+    const vaulty = {
+      // CSRF token from meta tag
+      csrfToken: document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+
+      // Wrapper around fetch that auto-adds headers for Flask/CSRF
+      fetch: async function(url, options = {}) {
+        options.headers = {
+          'X-Requested-With': 'XMLHttpRequest', // Tells Flask this is an AJAX request
+          'X-CSRFToken': this.csrfToken,        // CSRF protection for POSTs
+          ...(options.headers || {})
+        };
+        return fetch(url, options);
+      },
+
+      // Show a flash message without reloading the page
+      toast: function(message, type = 'success') {
+        let container = document.querySelector('.flash-messages');
+        if (!container) {
+          container = document.createElement('div');
+          container.className = 'flash-messages';
+          document.querySelector('main.container').prepend(container);
+        }
+
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `flash-msg ${type}`;
+        msgDiv.textContent = message;
+        
+        container.appendChild(msgDiv);
+        
+        // Auto-remove after 4 seconds
+        setTimeout(() => {
+          msgDiv.style.opacity = '0';
+          msgDiv.style.transform = 'translateY(-10px)';
+          msgDiv.style.transition = 'all 0.3s ease';
+          setTimeout(() => msgDiv.remove(), 300);
+        }, 4000);
+      }
+    };
   </script>
 </body>
 

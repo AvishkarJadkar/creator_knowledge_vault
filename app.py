@@ -17,6 +17,7 @@ from search import search_bp
 from chat import chat_bp
 from remix import remix_bp
 from settings import settings_bp
+from explore import explore_bp
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -73,6 +74,7 @@ app.register_blueprint(search_bp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(remix_bp)
 app.register_blueprint(settings_bp)
+app.register_blueprint(explore_bp)
 
 # Create DB tables on first request (works with gunicorn)
 with app.app_context():

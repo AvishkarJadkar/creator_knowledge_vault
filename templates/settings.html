@@ -13,7 +13,7 @@
             <i data-lucide="plus-circle" width="18" height="18" style="color: var(--primary);"></i>
             Link a Profile
         </h4>
-        <form method="post" action="/settings/add-profile">
+        <form id="add-profile-form" method="post" action="/settings/add-profile">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="flex" style="gap: var(--spacing-md); align-items: flex-end; flex-wrap: wrap;">
                 <div style="min-width: 160px;">
@@ -38,10 +38,10 @@
     </div>
 
     <!-- Linked Profiles -->
-    {% if profiles %}
-    <div style="display: flex; flex-direction: column; gap: var(--spacing-md);">
+    <div id="profiles-container" style="display: flex; flex-direction: column; gap: var(--spacing-md);">
+        {% if profiles %}
         {% for p in profiles %}
-        <div class="card" style="animation: fadeInUp 0.4s ease {{ 0.1 + loop.index * 0.05 }}s both;">
+        <div class="card profile-card" id="profile-card-{{ p.id }}" style="animation: fadeInUp 0.4s ease {{ 0.1 + loop.index * 0.05 }}s both;">
             <div class="flex justify-between items-center">
                 <div class="flex items-center" style="gap: var(--spacing-md);">
                     <div style="width: 44px; height: 44px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
@@ -65,7 +65,7 @@
 
                 <div class="flex items-center" style="gap: 0.5rem;">
                     {% if p.platform == 'youtube' %}
-                    <form method="post" action="/settings/sync-youtube/{{ p.id }}" style="margin: 0;">
+                    <form method="post" action="/settings/sync-youtube/{{ p.id }}" class="sync-form" style="margin: 0;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm btn-outline" title="Sync latest videos">
                             <i data-lucide="refresh-cw" width="14" height="14"></i> Sync Now
@@ -73,7 +73,7 @@
                     </form>
                     {% endif %}
 
-                    <form method="post" action="/settings/remove-profile/{{ p.id }}" style="margin: 0;">
+                    <form method="post" action="/settings/remove-profile/{{ p.id }}" class="remove-form" style="margin: 0;" data-profile-id="{{ p.id }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm"
                             style="background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);"
@@ -100,8 +100,8 @@
         </div>
         {% endfor %}
     </div>
-    {% else %}
-    <div class="card empty-state" style="animation: fadeInUp 0.5s ease 0.2s both;">
+    {% if not profiles %}
+    <div id="no-profiles-state" class="card empty-state" style="animation: fadeInUp 0.5s ease 0.2s both;">
         <div class="empty-icon">
             <i data-lucide="unlink" width="32" height="32"></i>
         </div>
@@ -118,11 +118,133 @@
             How it works
         </h4>
         <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.9rem; line-height: 1.8; color: var(--text-muted);">
-            <li><strong>YouTube:</strong> Click "Sync Now" to fetch transcripts from your latest videos and add them to
-                your vault automatically.</li>
-            <li><strong>Twitter, LinkedIn, Instagram:</strong> Profile links are saved for future auto-import support
-                (coming soon!).</li>
+            <li><strong>YouTube:</strong> Click "Sync Now" to fetch transcripts from your latest videos.</li>
+            <li><strong>Twitter, LinkedIn, Instagram:</strong> Profile links are saved for future support.</li>
         </ul>
     </div>
 </div>
+
+<script>
+    document.getElementById('platform').addEventListener('change', function() {
+        const platform = this.value;
+        const urlInput = document.getElementById('profile_url');
+        if (platform === 'youtube') {
+            urlInput.placeholder = 'https://www.youtube.com/@channel';
+        } else if (platform === 'twitter') {
+            urlInput.placeholder = 'https://x.com/username';
+        } else {
+            urlInput.placeholder = 'https://' + platform + '.com/username';
+        }
+    });
+
+    // --- AJAX Forms Setup ---
+    
+    // 1. Add Profile
+    const addForm = document.getElementById('add-profile-form');
+    if (addForm) {
+        addForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = this.querySelector('button[type="submit"]');
+            const originalHtml = btn.innerHTML;
+            
+            btn.innerHTML = `<i data-lucide="loader-2" class="spin" width="16" height="16"></i>`;
+            btn.disabled = true;
+            if (window.lucide) lucide.createIcons();
+            
+            try {
+                const formData = new FormData(this);
+                const resp = await vaulty.fetch(this.action, { method: 'POST', body: formData });
+                const data = await resp.json();
+                
+                if (data.status === 'success') {
+                    vaulty.toast(data.message, 'success');
+                    this.reset();
+                    // Just reload to get proper Jinja rendering of the new card for simplicity,
+                    // since we need to render the complex SVG icons/forms.
+                    // Doing a partial DOM insertion of complex cards is prone to missing event listeners.
+                    setTimeout(() => window.location.reload(), 800);
+                } else {
+                    vaulty.toast(data.message || 'Failed to add profile', 'error');
+                }
+            } catch (err) {
+                vaulty.toast('Something went wrong', 'error');
+            } finally {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                if (window.lucide) lucide.createIcons();
+            }
+        });
+    }
+
+    // 2. Remove Profile
+    document.querySelectorAll('.remove-form').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = this.querySelector('button');
+            const originalHtml = btn.innerHTML;
+            const profileId = this.dataset.profileId;
+            
+            btn.innerHTML = `<i data-lucide="loader-2" class="spin" width="14" height="14"></i>`;
+            btn.disabled = true;
+            if (window.lucide) lucide.createIcons();
+            
+            try {
+                const formData = new FormData(this);
+                const resp = await vaulty.fetch(this.action, { method: 'POST', body: formData });
+                const data = await resp.json();
+                
+                if (data.status === 'success') {
+                    vaulty.toast(data.message, 'success');
+                    const card = document.getElementById('profile-card-' + profileId);
+                    if (card) {
+                        card.style.transform = 'scale(0.95)';
+                        card.style.opacity = '0';
+                        setTimeout(() => {
+                            card.remove();
+                            // Show empty state if none left
+                            if (document.querySelectorAll('.profile-card').length === 0) {
+                                window.location.reload();
+                            }
+                        }, 300);
+                    }
+                } else {
+                    vaulty.toast(data.message || 'Failed to remove', 'error');
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                vaulty.toast('Something went wrong', 'error');
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
+        });
+    });
+
+    // 3. Sync YouTube
+    document.querySelectorAll('.sync-form').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = this.querySelector('button');
+            const originalHtml = btn.innerHTML;
+            
+            btn.innerHTML = `<i data-lucide="loader-2" class="spin" width="14" height="14"></i> Syncing...`;
+            btn.disabled = true;
+            if (window.lucide) lucide.createIcons();
+            
+            try {
+                const formData = new FormData(this);
+                const resp = await vaulty.fetch(this.action, { method: 'POST', body: formData });
+                const data = await resp.json();
+                
+                vaulty.toast(data.message, data.status === 'error' ? 'error' : 'success');
+            } catch (err) {
+                vaulty.toast('Sync failed', 'error');
+            } finally {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                if (window.lucide) lucide.createIcons();
+            }
+        });
+    });
+</script>
 {% endblock %}

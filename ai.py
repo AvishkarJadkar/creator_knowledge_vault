@@ -34,4 +34,43 @@ def cosine_similarity(v1, v2):
     if magnitude1 == 0 or magnitude2 == 0:
         return 0.0
         
-    return dot_product / (magnitude1 * magnitude2)
+def generate_summary(text: str) -> str:
+    """Synthesize a research report from multiple pieces of content."""
+    if not text or not text.strip():
+        return "No content available to summarize."
+    
+    # --- SECURITY/STABILITY: Truncate input to avoid token limits ---
+    # ~2,000 tokens / 8,000 characters is plenty for a synthesis of 5 posts
+    MAX_CHARS = 8000
+    if len(text) > MAX_CHARS:
+        print(f"DEBUG: Truncating synthesis text from {len(text)} to {MAX_CHARS} characters.")
+        text = text[:MAX_CHARS] + "..."
+
+    prompt = f"""
+    You are an expert research assistant. Analyze the following collection of posts and comments 
+    on a specific topic and provide a comprehensive, structured summary.
+    
+    Focus on:
+    1. Key themes and recurring ideas.
+    2. Dominant opinions or consensus.
+    3. Notable counter-points or controversial takes.
+    4. Practical takeaways or advice mentioned.
+    
+    Format the output with clear headings and bullet points. Use a professional yet accessible tone.
+    
+    Content to synthesize:
+    {text}
+    
+    Research Summary:
+    """
+    
+    try:
+        # Use more robust model name identifier
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
+        )
+        return response.text
+    except Exception as e:
+        print(f"DEBUG: Summary Error: {type(e).__name__}: {e}")
+        return "Failed to generate research summary."

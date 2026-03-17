@@ -755,6 +755,18 @@ input[type="file"]::file-selector-button:hover {
     border: 1px solid rgba(248, 113, 113, 0.2);
 }
 
+.badge-reddit {
+    background: rgba(255, 69, 0, 0.15);
+    color: #ff8b60;
+    border: 1px solid rgba(255, 69, 0, 0.3);
+}
+
+.badge-youtube {
+    background: rgba(255, 0, 0, 0.12);
+    color: #ff5555;
+    border: 1px solid rgba(255, 0, 0, 0.2);
+}
+
 /* ---------- Dashboard Helpers ---------- */
 .dashboard-header {
     margin-bottom: var(--spacing-2xl);

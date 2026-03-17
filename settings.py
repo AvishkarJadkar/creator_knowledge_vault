@@ -1,7 +1,7 @@
 import re
 import feedparser
 import urllib.request
-from flask import Blueprint, render_template, request, session, redirect, url_for, flash
+from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
 from extensions import db
 from models import SocialProfile, Content, Embedding
 from youtube_utils import get_youtube_transcript
@@ -53,6 +53,19 @@ def settings():
     return render_template("settings.html", profiles=profiles)
 
 
+@settings_bp.route("/onboarding", methods=["GET"])
+def onboarding():
+    if "user_id" not in session:
+        return redirect(url_for("auth.login"))
+    
+    # If they already have a profile, skip onboarding
+    existing = SocialProfile.query.filter_by(user_id=session["user_id"]).first()
+    if existing:
+        return redirect(url_for("dashboard"))
+        
+    return render_template("onboarding.html")
+
+
 @settings_bp.route("/settings/add-profile", methods=["POST"])
 def add_profile():
     if "user_id" not in session:
@@ -64,17 +77,24 @@ def add_profile():
     # --- SECURITY: Validate platform against whitelist ---
     allowed_platforms = {"youtube", "twitter", "linkedin", "instagram"}
     if platform not in allowed_platforms:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"status": "error", "message": "Invalid platform selected"})
         flash("Invalid platform selected", "error")
         return redirect(url_for("settings.settings"))
 
     if not profile_url:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"status": "error", "message": "Please enter a profile URL"})
         flash("Please enter a profile URL", "error")
         return redirect(url_for("settings.settings"))
 
     # --- SECURITY: Validate URL format and length ---
     if len(profile_url) > 500 or not profile_url.startswith("https://"):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"status": "error", "message": "Please enter a valid HTTPS profile URL"})
         flash("Please enter a valid HTTPS profile URL", "error")
         return redirect(url_for("settings.settings"))
+
 
     # Check for duplicate
     existing = SocialProfile.query.filter_by(
@@ -83,6 +103,8 @@ def add_profile():
         profile_url=profile_url
     ).first()
     if existing:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"status": "error", "message": "This profile is already linked"})
         flash("This profile is already linked", "error")
         return redirect(url_for("settings.settings"))
 
@@ -90,6 +112,8 @@ def add_profile():
     if platform == "youtube":
         channel_id = resolve_channel_id(profile_url)
         if not channel_id:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"status": "error", "message": "Could not detect YouTube channel. Make sure the URL is correct."})
             flash("Could not detect YouTube channel. Make sure the URL is correct.", "error")
             return redirect(url_for("settings.settings"))
 
@@ -101,6 +125,17 @@ def add_profile():
     )
     db.session.add(profile)
     db.session.commit()
+    # --- AJAX Response for Success ---
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({
+            "status": "success",
+            "message": f"{platform.title()} profile linked successfully!",
+            "profile": {
+                "id": profile.id,
+                "platform": profile.platform,
+                "profile_url": profile.profile_url
+            }
+        })
 
     flash(f"{platform.title()} profile linked successfully!", "success")
     return redirect(url_for("settings.settings"))
@@ -109,14 +144,23 @@ def add_profile():
 @settings_bp.route("/settings/remove-profile/<int:profile_id>", methods=["POST"])
 def remove_profile(profile_id):
     if "user_id" not in session:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"status": "error", "message": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
 
     profile = SocialProfile.query.get_or_404(profile_id)
     if profile.user_id != session["user_id"]:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"status": "error", "message": "Unauthorized"}), 401
         return redirect(url_for("settings.settings"))
 
     db.session.delete(profile)
     db.session.commit()
+    
+    # --- AJAX Response ---
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"status": "success", "message": "Profile removed"})
+        
     flash("Profile removed", "success")
     return redirect(url_for("settings.settings"))
 
@@ -125,6 +169,8 @@ def remove_profile(profile_id):
 def sync_youtube(profile_id):
     """Manually trigger sync for a YouTube profile."""
     if "user_id" not in session:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"status": "error", "message": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
 
     profile = SocialProfile.query.get_or_404(profile_id)
@@ -132,12 +178,22 @@ def sync_youtube(profile_id):
         return redirect(url_for("settings.settings"))
 
     imported, errors = sync_youtube_channel(profile)
+    
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    
     if imported > 0:
-        flash(f"Imported {imported} new video(s) from YouTube!", "success")
+        msg = f"Imported {imported} new video(s) from YouTube!"
+        if is_ajax: return jsonify({"status": "success", "message": msg})
+        flash(msg, "success")
     elif errors:
-        flash(f"Sync issue: {errors}", "error")
+        msg = f"Sync issue: {errors}"
+        if is_ajax: return jsonify({"status": "error", "message": msg})
+        flash(msg, "error")
     else:
-        flash("No new videos found to import.", "")
+        msg = "No new videos found to import."
+        if is_ajax: return jsonify({"status": "info", "message": msg})
+        flash(msg, "")
+        
     return redirect(url_for("settings.settings"))
 
 
@@ -216,3 +272,5 @@ def sync_youtube_channel(profile):
         db.session.commit()
 
     return imported, ""
+
+

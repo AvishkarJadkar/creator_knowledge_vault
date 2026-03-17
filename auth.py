@@ -61,7 +61,7 @@ def signup():
 
         session["user_id"] = user.id
         session["user_name"] = user.name
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("settings.onboarding"))
 
     return render_template("signup.html")
 
