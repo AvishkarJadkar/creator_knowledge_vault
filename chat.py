@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify, g
 from models import Content, Embedding, ChatSession, ChatMessage, Memory
 from extensions import db
 from dotenv import load_dotenv
@@ -8,6 +8,7 @@ import re
 from datetime import datetime, timedelta
 from groq import Groq
 from ai import get_embedding, cosine_similarity
+from rate_limit import check_and_increment, roughly_count_tokens
 
 load_dotenv()
 
@@ -61,18 +62,18 @@ EXTRACTED FACT:"""
 @chat_bp.route("/chat")
 @chat_bp.route("/chat/<int:session_id>")
 def chat(session_id=None):
-    if "user_id" not in session:
+    if not g.user_id:
         return redirect(url_for("auth.login"))
 
-    user_sessions = ChatSession.query.filter_by(user_id=session["user_id"]).order_by(ChatSession.updated_at.desc()).all()
-    user_memories = Memory.query.filter_by(user_id=session["user_id"]).order_by(Memory.created_at.desc()).all()
+    user_sessions = ChatSession.query.filter_by(user_id=g.user_id).order_by(ChatSession.updated_at.desc()).all()
+    user_memories = Memory.query.filter_by(user_id=g.user_id).order_by(Memory.created_at.desc()).all()
     
     active_session = None
     messages = []
     
     if session_id:
         active_session = ChatSession.query.get_or_404(session_id)
-        if active_session.user_id != session["user_id"]:
+        if active_session.user_id != g.user_id:
             return redirect(url_for("chat.chat"))
         messages = ChatMessage.query.filter_by(session_id=session_id).order_by(ChatMessage.created_at.asc()).all()
     
@@ -104,12 +105,12 @@ def chat(session_id=None):
 
 @chat_bp.route("/chat/new", methods=["POST"])
 def new_chat():
-    if "user_id" not in session:
+    if not g.user_id:
         if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({"error": "Not logged in"}), 401
         return redirect(url_for("auth.login"))
     
-    new_sess = ChatSession(user_id=session["user_id"], title="New Chat")
+    new_sess = ChatSession(user_id=g.user_id, title="New Chat")
     db.session.add(new_sess)
     db.session.commit()
     
@@ -120,11 +121,11 @@ def new_chat():
 
 @chat_bp.route("/chat/<int:session_id>/send", methods=["POST"])
 def send_message(session_id):
-    if "user_id" not in session:
+    if not g.user_id:
         return jsonify({"error": "Not logged in"}), 401
         
     chat_sess = ChatSession.query.get_or_404(session_id)
-    if chat_sess.user_id != session["user_id"]:
+    if chat_sess.user_id != g.user_id:
         return jsonify({"error": "Unauthorized"}), 403
     
     # Accept both form data and JSON
@@ -136,9 +137,21 @@ def send_message(session_id):
     if not question:
         return jsonify({"error": "Empty message"}), 400
 
-    # --- SECURITY: Limit message length to prevent abuse ---
+    # --- SECURITY: Limit message length and tokens ---
     if len(question) > 10000:
         return jsonify({"error": "Message too long. Maximum 10,000 characters."}), 400
+    
+    tokens = roughly_count_tokens(question)
+    if tokens > 3000:
+        return jsonify({"error": f"Message too long (approx {tokens} tokens). Maximum 3,000 tokens."}), 400
+
+    # --- RATE LIMITING: Per-user daily and burst ---
+    allowed, msg, retry_after = check_and_increment(g.user_id, "groq_chat", daily_limit=30, minute_limit=5)
+    if not allowed:
+        response = jsonify({"error": msg})
+        if retry_after:
+            response.headers["Retry-After"] = str(retry_after)
+        return response, 429
 
     # 1. Save User Message
     user_msg = ChatMessage(session_id=session_id, role="user", content=question)
@@ -159,7 +172,7 @@ def send_message(session_id):
         
         extracted = extract_fact(question, history_text)
         if extracted:
-            new_mem = Memory(user_id=session["user_id"], fact=extracted)
+            new_mem = Memory(user_id=g.user_id, fact=extracted)
             db.session.add(new_mem)
             db.session.commit()
             memory_saved_fact = extracted
@@ -167,10 +180,10 @@ def send_message(session_id):
     # 3. RAG Retrieval
     context_parts = []
     try:
-        query_embedding = get_embedding(question)
+        query_embedding = get_embedding(question, user_id=g.user_id)
         if query_embedding:
             # Get user content
-            all_contents = Content.query.filter_by(user_id=session["user_id"], is_deleted=False).all()
+            all_contents = Content.query.filter_by(user_id=g.user_id, is_deleted=False).all()
             content_ids = [c.id for c in all_contents]
             content_map = {c.id: c for c in all_contents}
             
@@ -195,13 +208,13 @@ def send_message(session_id):
 
     # Fallback context if RAG fails or returns nothing
     if not context_parts:
-        contents = Content.query.filter_by(user_id=session["user_id"], is_deleted=False).order_by(Content.created_at.desc()).limit(5).all()
+        contents = Content.query.filter_by(user_id=g.user_id, is_deleted=False).order_by(Content.created_at.desc()).limit(5).all()
         context_parts = [f"Title: {c.title}\n{c.body[:500]}" for c in contents]
 
     context = "\n\n".join(context_parts)
 
     # 4. Load Memories
-    user_memories = Memory.query.filter_by(user_id=session["user_id"]).all()
+    user_memories = Memory.query.filter_by(user_id=g.user_id).all()
     memories_str = "\n".join([f"- {m.fact}" for m in user_memories]) if user_memories else "No specific personal facts saved yet."
 
     # 5. Build Multi-Turn History
@@ -282,7 +295,7 @@ def send_message(session_id):
 
 @chat_bp.route("/chat/<int:session_id>/delete", methods=["POST"])
 def delete_session(session_id):
-    if "user_id" not in session:
+    if not g.user_id:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({"error": "Not logged in"}), 401
         return redirect(url_for("auth.login"))
@@ -304,7 +317,7 @@ def delete_session(session_id):
 
 @chat_bp.route("/chat/memory/<int:memory_id>/delete", methods=["POST"])
 def delete_memory(memory_id):
-    if "user_id" not in session:
+    if not g.user_id:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({"error": "Not logged in"}), 401
         return redirect(url_for("auth.login"))

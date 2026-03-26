@@ -1,7 +1,7 @@
 import re
 import feedparser
 import urllib.request
-from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify, g
 from extensions import db
 from models import SocialProfile, Content, Embedding
 from youtube_utils import get_youtube_transcript
@@ -46,20 +46,20 @@ def resolve_channel_id(url):
 
 @settings_bp.route("/settings", methods=["GET"])
 def settings():
-    if "user_id" not in session:
+    if not g.user_id:
         return redirect(url_for("auth.login"))
 
-    profiles = SocialProfile.query.filter_by(user_id=session["user_id"]).all()
+    profiles = SocialProfile.query.filter_by(user_id=g.user_id).all()
     return render_template("settings.html", profiles=profiles)
 
 
 @settings_bp.route("/onboarding", methods=["GET"])
 def onboarding():
-    if "user_id" not in session:
+    if not g.user_id:
         return redirect(url_for("auth.login"))
     
     # If they already have a profile, skip onboarding
-    existing = SocialProfile.query.filter_by(user_id=session["user_id"]).first()
+    existing = SocialProfile.query.filter_by(user_id=g.user_id).first()
     if existing:
         return redirect(url_for("dashboard"))
         
@@ -68,7 +68,7 @@ def onboarding():
 
 @settings_bp.route("/settings/add-profile", methods=["POST"])
 def add_profile():
-    if "user_id" not in session:
+    if not g.user_id:
         return redirect(url_for("auth.login"))
 
     platform = request.form.get("platform", "").strip()
@@ -98,7 +98,7 @@ def add_profile():
 
     # Check for duplicate
     existing = SocialProfile.query.filter_by(
-        user_id=session["user_id"],
+        user_id=g.user_id,
         platform=platform,
         profile_url=profile_url
     ).first()
@@ -118,7 +118,7 @@ def add_profile():
             return redirect(url_for("settings.settings"))
 
     profile = SocialProfile(
-        user_id=session["user_id"],
+        user_id=g.user_id,
         platform=platform,
         profile_url=profile_url,
         channel_id=channel_id,
@@ -143,13 +143,13 @@ def add_profile():
 
 @settings_bp.route("/settings/remove-profile/<int:profile_id>", methods=["POST"])
 def remove_profile(profile_id):
-    if "user_id" not in session:
+    if not g.user_id:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"status": "error", "message": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
 
     profile = SocialProfile.query.get_or_404(profile_id)
-    if profile.user_id != session["user_id"]:
+    if profile.user_id != g.user_id:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"status": "error", "message": "Unauthorized"}), 401
         return redirect(url_for("settings.settings"))
@@ -168,16 +168,16 @@ def remove_profile(profile_id):
 @settings_bp.route("/settings/sync-youtube/<int:profile_id>", methods=["POST"])
 def sync_youtube(profile_id):
     """Manually trigger sync for a YouTube profile."""
-    if "user_id" not in session:
+    if not g.user_id:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"status": "error", "message": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
 
     profile = SocialProfile.query.get_or_404(profile_id)
-    if profile.user_id != session["user_id"] or profile.platform != "youtube":
+    if profile.user_id != g.user_id or profile.platform != "youtube":
         return redirect(url_for("settings.settings"))
 
-    imported, errors = sync_youtube_channel(profile)
+    imported, errors = sync_youtube_channel(profile, user_id=g.user_id)
     
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     
@@ -197,7 +197,7 @@ def sync_youtube(profile_id):
     return redirect(url_for("settings.settings"))
 
 
-def sync_youtube_channel(profile):
+def sync_youtube_channel(profile, user_id=None):
     """Fetch new videos from a YouTube channel RSS feed and import transcripts."""
     if not profile.channel_id:
         return 0, "No channel ID found. Try removing and re-adding the profile."
@@ -247,7 +247,7 @@ def sync_youtube_channel(profile):
 
                 # Generate embedding
                 try:
-                    embedding = get_embedding(content.body)
+                    embedding = get_embedding(content.body, user_id=user_id)
                     if embedding:
                         db.session.add(
                             Embedding(

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
+from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify, g
 from .providers import PROVIDERS
 from ai import generate_summary
 
@@ -6,14 +6,14 @@ explore_bp = Blueprint("explore", __name__)
 
 @explore_bp.route("/explore")
 def explore():
-    if "user_id" not in session:
+    if not g.user_id:
         return redirect(url_for("auth.login"))
     
     return render_template("explore.html", providers=PROVIDERS.values(), results=None, summary=None)
 
 @explore_bp.route("/explore/search")
 def search():
-    if "user_id" not in session:
+    if not g.user_id:
         return redirect(url_for("auth.login"))
 
     keyword = request.args.get("q", "").strip()

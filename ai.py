@@ -2,15 +2,28 @@ import os
 from google import genai
 from dotenv import load_dotenv
 import math
+from rate_limit import check_and_increment
 
 load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-def get_embedding(text: str):
+def get_embedding(text: str, user_id: str = None):
     """Generate a 768-dimensional embedding vector for the given text."""
     if not text or not text.strip():
         return None
+    
+    # --- SECURITY: Max content size for embeddings ---
+    if len(text) > 10000:
+        print(f"DEBUG: Embedding text too long ({len(text)} characters). Truncating.")
+        text = text[:10000]
+
+    # --- RATE LIMITING: Per-user checks ---
+    if user_id:
+        allowed, msg, _ = check_and_increment(user_id, "gemini_embed", daily_limit=50, minute_limit=5)
+        if not allowed:
+            print(f"DEBUG: Rate limit exceeded for {user_id}: {msg}")
+            return None
     
     try:
         result = client.models.embed_content(

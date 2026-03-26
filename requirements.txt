@@ -13,4 +13,5 @@ gunicorn
 google-genai
 psycopg2-binary
 requests
-urllib3
+urllib3
+supabase

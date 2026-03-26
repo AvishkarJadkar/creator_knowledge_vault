@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
+from flask import Blueprint, render_template, request, session, redirect, url_for, g, jsonify
 from models import Content, Embedding
 from ai import get_embedding, cosine_similarity
 import json
@@ -7,7 +7,7 @@ search_bp = Blueprint("search", __name__)
 
 @search_bp.route("/search", methods=["GET", "POST"])
 def search():
-    if "user_id" not in session:
+    if not g.user_id:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"error": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
@@ -24,11 +24,11 @@ def search():
 
     if query:
         # 1. Try Semantic Search FIRST
-        query_embedding = get_embedding(query)
+        query_embedding = get_embedding(query, user_id=g.user_id)
         
         if query_embedding:
             # Get all embeddings for this user
-            all_contents = Content.query.filter_by(user_id=session["user_id"], is_deleted=False).all()
+            all_contents = Content.query.filter_by(user_id=g.user_id, is_deleted=False).all()
             content_ids = [c.id for c in all_contents]
             
             embeddings = Embedding.query.filter(Embedding.content_id.in_(content_ids)).all()
@@ -54,7 +54,7 @@ def search():
             # --- SECURITY: Escape SQL wildcard characters to prevent injection ---
             safe_query = query.replace("%", r"\%").replace("_", r"\_")
             results = Content.query.filter(
-                Content.user_id == session["user_id"],
+                Content.user_id == g.user_id,
                 Content.is_deleted == False,
                 Content.body.ilike(f"%{safe_query}%")
             ).all()
@@ -62,7 +62,7 @@ def search():
             # Also search by title if body search returned nothing
             if not results:
                 results = Content.query.filter(
-                    Content.user_id == session["user_id"],
+                    Content.user_id == g.user_id,
                     Content.is_deleted == False,
                     Content.title.ilike(f"%{safe_query}%")
                 ).all()

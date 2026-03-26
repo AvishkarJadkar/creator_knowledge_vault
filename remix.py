@@ -1,8 +1,9 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
+from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify, g
 from models import Content
 from dotenv import load_dotenv
 import os
 from groq import Groq
+from rate_limit import check_and_increment, roughly_count_tokens
 
 load_dotenv()
 
@@ -65,7 +66,7 @@ RULES:
 
 @remix_bp.route("/remix/<int:content_id>", methods=["GET", "POST"])
 def remix(content_id):
-    if "user_id" not in session:
+    if not g.user_id:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"error": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
@@ -85,11 +86,22 @@ def remix(content_id):
             return render_template("remix.html", content=content, output="Invalid remix type selected.")
 
         prompt = f"""{PROMPTS[remix_type]}
-
-CONTENT TO REMIX:
 {content.body[:2000]}
 
 YOUR OUTPUT (ready to copy-paste, no meta-commentary):"""
+
+        # --- SECURITY: Limit tokens ---
+        tokens = roughly_count_tokens(prompt)
+        if tokens > 3000:
+             return jsonify({"error": f"Content too long (approx {tokens} tokens). Maximum 3,000 tokens."}), 400
+
+        # --- RATE LIMITING: Per-user daily and burst ---
+        allowed, msg, retry_after = check_and_increment(g.user_id, "groq_remix", daily_limit=30, minute_limit=5)
+        if not allowed:
+            response = jsonify({"error": msg})
+            if retry_after:
+                response.headers["Retry-After"] = str(retry_after)
+            return response, 429
 
         try:
             response = client.chat.completions.create(
