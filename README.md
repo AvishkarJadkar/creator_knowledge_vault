@@ -4,7 +4,7 @@ Vaulty AI is a powerful, AI-driven personal knowledge management (PKM) tool desi
 
 ## Live Demo
 Currently live at: [https://vaultyai.onrender.com](https://vaultyai.onrender.com)
-*(Note: As it is hosted on Render's free tier, the application sleeps after 15 minutes of inactivity. Please allow 1-2 minutes for it to wake up on your first visit. v2 is pushed on branch-experiments and is not live on render yet)*
+*(Note: As it is hosted on Render's free tier, the application sleeps after 15 minutes of inactivity. Please allow 1-2 minutes for it to wake up on your first visit.)*
 
 ## Concept & Features
 
@@ -13,6 +13,7 @@ Currently live at: [https://vaultyai.onrender.com](https://vaultyai.onrender.com
 * **Chat with Your Vault:** Discuss your ideas, ask questions, and brainstorm with an AI that has full context of your entire knowledge base. The assistant also builds memories based on facts from your chat sessions.
 * **Content Remixing:** Repurpose your existing content. Vaulty helps you remix your ideas into new formats, translating a transcript into a dynamic social media thread or a comprehensive blog post structure.
 * **Explore Connections:** Visualize similarities between pieces of content to uncover patterns in your creative thinking and unearth forgotten ideas.
+* **Explore Ideas:** Explore new ideas from reddit by using keyword search feature.
 
 ## Tech Stack
 * **Backend Framework:** Flask (Python)
@@ -38,7 +39,7 @@ Follow these steps to get Vaulty AI running on your local machine.
 1. **Clone the repository and access the vault:**
    If you haven't already:
    ```bash
-   git clone <your-repository-url>
+   git clone https://github.com/AvishkarJadkar/creator_knowledge_vault
    cd creator_knowledge_vault
    ```
 
