@@ -18,9 +18,6 @@ from remix import remix_bp
 from settings import settings_bp
 from explore import explore_bp
 from flask_wtf.csrf import CSRFProtect
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from supabase_client import supabase
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"), static_folder=os.path.join(BASE_DIR, "static"))
 
@@ -34,15 +31,6 @@ if not app.secret_key:
 
 # --- SECURITY: CSRF Protection ---
 csrf = CSRFProtect(app)
-
-# --- SECURITY: Rate Limiting (IP-based) ---
-# Note: Per-user API limits are handled separately in rate_limit.py
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://",
-)
 
 # --- SECURITY: Secure session cookies ---
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -81,7 +69,7 @@ from models import Content # Ensure models are loaded
 with app.app_context():
     db.create_all()
 
-# --- AUTH MIDDLEWARE: Validate Supabase Session ---
+# --- AUTH MIDDLEWARE: Validate Firebase Session ---
 @app.before_request
 def load_user():
     g.user_id = session.get("user_id")
@@ -103,6 +91,10 @@ def set_security_headers(response):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
+
+@app.route("/health")
+def health():
+    return {"status": "ok"}, 200
 
 @app.route("/")
 def home():

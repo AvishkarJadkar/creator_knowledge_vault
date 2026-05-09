@@ -15,8 +15,14 @@ load_dotenv()
 chat_bp = Blueprint("chat", __name__)
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-def generate_chat_title(user_msg, bot_msg):
-    """Uses LLM to generate a short, contextual chat title."""
+def generate_chat_title(user_msg, bot_msg, user_id=None):
+    """Uses LLM to generate a short, contextual chat title.
+    Counts against the user's groq_chat quota."""
+    # Count this LLM call against the user's daily quota
+    if user_id:
+        allowed, msg, _ = check_and_increment(user_id, "groq_chat")
+        if not allowed:
+            return user_msg[:50]  # Graceful fallback — use raw text
     try:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -31,8 +37,14 @@ def generate_chat_title(user_msg, bot_msg):
     except:
         return user_msg[:50]
 
-def extract_fact(text, history):
-    """Uses LLM to extract a clean fact from 'remember' style messages."""
+def extract_fact(text, history, user_id=None):
+    """Uses LLM to extract a clean fact from 'remember' style messages.
+    Counts against the user's groq_chat quota."""
+    # Count this LLM call against the user's daily quota
+    if user_id:
+        allowed, msg, _ = check_and_increment(user_id, "groq_chat")
+        if not allowed:
+            return None  # Graceful fallback — skip memory extraction
     prompt = f"""Extract ONLY the explicitly stated fact from the user's message.
 Format as a single, concise sentence starting with "The user...".
 If the message is vague (e.g., "remember name" without giving a name), return "NONE".
@@ -146,7 +158,7 @@ def send_message(session_id):
         return jsonify({"error": f"Message too long (approx {tokens} tokens). Maximum 3,000 tokens."}), 400
 
     # --- RATE LIMITING: Per-user daily and burst ---
-    allowed, msg, retry_after = check_and_increment(g.user_id, "groq_chat", daily_limit=30, minute_limit=5)
+    allowed, msg, retry_after = check_and_increment(g.user_id, "groq_chat")
     if not allowed:
         response = jsonify({"error": msg})
         if retry_after:
@@ -170,7 +182,7 @@ def send_message(session_id):
         history = ChatMessage.query.filter_by(session_id=session_id).order_by(ChatMessage.created_at.desc()).limit(5).all()
         history_text = "\n".join([f"{m.role}: {m.content}" for m in reversed(history)])
         
-        extracted = extract_fact(question, history_text)
+        extracted = extract_fact(question, history_text, user_id=g.user_id)
         if extracted:
             new_mem = Memory(user_id=g.user_id, fact=extracted)
             db.session.add(new_mem)
@@ -182,26 +194,25 @@ def send_message(session_id):
     try:
         query_embedding = get_embedding(question, user_id=g.user_id)
         if query_embedding:
-            # Get user content
-            all_contents = Content.query.filter_by(user_id=g.user_id, is_deleted=False).all()
-            content_ids = [c.id for c in all_contents]
-            content_map = {c.id: c for c in all_contents}
-            
-            # Fetch embeddings
-            embeddings = Embedding.query.filter(Embedding.content_id.in_(content_ids)).all()
+            # Optimized retrieval with JOIN
+            data = db.session.query(Content, Embedding).join(
+                Embedding, Content.id == Embedding.content_id
+            ).filter(
+                Content.user_id == g.user_id,
+                Content.is_deleted == False
+            ).all()
             
             scored_results = []
-            for emb in embeddings:
-                vector = json.loads(emb.vector)
-                score = cosine_similarity(query_embedding, vector)
-                if score > 0.3:
-                    scored_results.append((score, content_map[emb.content_id]))
+            for c, emb in data:
+                try:
+                    score = cosine_similarity(query_embedding, json.loads(emb.vector))
+                    if score > 0.4: # Higher threshold for chat accuracy
+                        scored_results.append((score, c))
+                except: continue
             
             scored_results.sort(key=lambda x: x[0], reverse=True)
-            top_results = scored_results[:5] # Top 5 relevant snippets
-            
-            for _, c in top_results:
-                context_parts.append(f"Title: {c.title}\n{c.body[:1000]}") # Longer snippets for better context
+            for _, c in scored_results[:5]: # Top 5 relevant snippets
+                context_parts.append(f"Title: {c.title}\n{c.body[:1000]}")
             
     except Exception as e:
         print(f"Retrieval error: {e}")
@@ -274,7 +285,7 @@ def send_message(session_id):
         # Generate smart title after first exchange
         new_title = None
         if is_first_message:
-            chat_sess.title = generate_chat_title(question, answer)
+            chat_sess.title = generate_chat_title(question, answer, user_id=g.user_id)
             new_title = chat_sess.title
         db.session.commit()
         

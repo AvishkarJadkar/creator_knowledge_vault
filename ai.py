@@ -20,7 +20,7 @@ def get_embedding(text: str, user_id: str = None):
 
     # --- RATE LIMITING: Per-user checks ---
     if user_id:
-        allowed, msg, _ = check_and_increment(user_id, "gemini_embed", daily_limit=50, minute_limit=5)
+        allowed, msg, _ = check_and_increment(user_id, "gemini_embed")
         if not allowed:
             print(f"DEBUG: Rate limit exceeded for {user_id}: {msg}")
             return None
@@ -49,11 +49,17 @@ def cosine_similarity(v1, v2):
         
     return dot_product / (magnitude1 * magnitude2)
         
-def generate_summary(text: str) -> str:
+def generate_summary(text: str, user_id: str = None) -> str:
     """Synthesize a research report from multiple pieces of content."""
     if not text or not text.strip():
         return "No content available to summarize."
     
+    # --- RATE LIMITING: Per-user checks ---
+    if user_id:
+        allowed, msg, _ = check_and_increment(user_id, "gemini_explore")
+        if not allowed:
+            return f"⚠️ {msg}"
+
     # --- SECURITY/STABILITY: Truncate input to avoid token limits ---
     # ~2,000 tokens / 8,000 characters is plenty for a synthesis of 5 posts
     MAX_CHARS = 8000

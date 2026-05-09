@@ -27,27 +27,29 @@ def search():
         query_embedding = get_embedding(query, user_id=g.user_id)
         
         if query_embedding:
-            # Get all embeddings for this user
-            all_contents = Content.query.filter_by(user_id=g.user_id, is_deleted=False).all()
-            content_ids = [c.id for c in all_contents]
-            
-            embeddings = Embedding.query.filter(Embedding.content_id.in_(content_ids)).all()
-            
-            if embeddings:
-                # Calculate similarities
+            # Join Content and Embedding in a single query
+            # We filter by user_id and is_deleted at the database level
+            data = db.session.query(Content, Embedding).join(
+                Embedding, Content.id == Embedding.content_id
+            ).filter(
+                Content.user_id == g.user_id,
+                Content.is_deleted == False
+            ).all()
+
+            if data:
                 scored_results = []
-                # Map content ID to content object for easy access
-                content_map = {c.id: c for c in all_contents}
+                for content, emb in data:
+                    try:
+                        vector = json.loads(emb.vector)
+                        score = cosine_similarity(query_embedding, vector)
+                        if score > 0.15: # Slightly higher threshold for efficiency
+                            scored_results.append((score, content))
+                    except (json.JSONDecodeError, ValueError):
+                        continue
                 
-                for emb in embeddings:
-                    vector = json.loads(emb.vector)
-                    score = cosine_similarity(query_embedding, vector)
-                    if score > 0.1: # Threshold to filter out irrelevant stuff
-                        scored_results.append((score, content_map[emb.content_id]))
-                
-                # Sort by score DESC
+                # Sort by score DESC and take top results
                 scored_results.sort(key=lambda x: x[0], reverse=True)
-                results = [item[1] for item in scored_results]
+                results = [item[1] for item in scored_results[:20]]
 
         # 2. Fallback to Keyword Search (if semantic search fails or returns nothing)
         if not results:

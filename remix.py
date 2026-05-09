@@ -96,7 +96,7 @@ YOUR OUTPUT (ready to copy-paste, no meta-commentary):"""
              return jsonify({"error": f"Content too long (approx {tokens} tokens). Maximum 3,000 tokens."}), 400
 
         # --- RATE LIMITING: Per-user daily and burst ---
-        allowed, msg, retry_after = check_and_increment(g.user_id, "groq_remix", daily_limit=30, minute_limit=5)
+        allowed, msg, retry_after = check_and_increment(g.user_id, "groq_remix")
         if not allowed:
             response = jsonify({"error": msg})
             if retry_after:

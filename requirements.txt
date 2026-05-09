@@ -1,12 +1,10 @@
 flask
 flask_sqlalchemy
 flask-wtf
-flask-limiter
 werkzeug
 pypdf
 python-dotenv
 youtube-transcript-api
-yt-dlp
 groq
 feedparser
 gunicorn
@@ -14,4 +12,3 @@ google-genai
 psycopg2-binary
 requests
 urllib3
-supabase

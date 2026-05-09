@@ -8,6 +8,10 @@
             Explore Ideas
         </h2>
         <p class="text-muted" style="font-size: 1.1rem;">Keyword-based topic discovery & AI research synthesis</p>
+        
+        <div id="explore-quota-info" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 1rem; display: none;">
+            <span id="explore-remaining-count" style="font-weight: 600; color: var(--primary);"></span> credits remaining
+        </div>
 
         <form id="explore-search-form" action="/explore/search" method="get" style="margin-top: 1.5rem; display: flex; gap: 0.8rem; max-width: 600px; margin: 1.5rem auto 0;">
             <div style="position: relative; flex-grow: 1;">
@@ -144,6 +148,25 @@
     }
     bindHoverEffects();
 
+    async function updateExploreQuota() {
+        try {
+            const resp = await vaulty.fetch('/api/usage');
+            if (resp.ok) {
+                const stats = await resp.json();
+                const expStats = stats['gemini_explore'];
+                if (expStats) {
+                    const info = document.getElementById('explore-quota-info');
+                    const count = document.getElementById('explore-remaining-count');
+                    if (info && count) {
+                        count.textContent = expStats.limit - expStats.used;
+                        info.style.display = 'block';
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+    updateExploreQuota();
+
     function fillAndSubmit(query) {
         document.getElementById('explore-search-input').value = query;
         document.getElementById('explore-search-form').dispatchEvent(new Event('submit'));
@@ -276,6 +299,7 @@
             }
             
             container.innerHTML = html;
+            updateExploreQuota();
             
         } catch (e) {
             console.error(e);

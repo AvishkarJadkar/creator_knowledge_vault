@@ -1,12 +1,14 @@
 import re
 import feedparser
 import urllib.request
+import os
+import json
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify, g
 from extensions import db
 from models import SocialProfile, Content, Embedding
 from youtube_utils import get_youtube_transcript
 from ai import get_embedding
-import json
+from rate_limit import get_usage_stats
 
 settings_bp = Blueprint("settings", __name__)
 
@@ -121,7 +123,8 @@ def add_profile():
         user_id=g.user_id,
         platform=platform,
         profile_url=profile_url,
-        channel_id=channel_id,
+        channel_id=channel_id or "",
+        last_synced_video="",
     )
     db.session.add(profile)
     db.session.commit()
@@ -165,9 +168,22 @@ def remove_profile(profile_id):
     return redirect(url_for("settings.settings"))
 
 
+import threading
+from flask import current_app
+
+def run_sync_in_background(app, profile_id, user_id):
+    """Wrapper to run sync in a separate thread with the app context."""
+    with app.app_context():
+        profile = SocialProfile.query.get(profile_id)
+        if profile:
+            try:
+                sync_youtube_channel(profile, user_id=user_id)
+            except Exception as e:
+                print(f"[Background Sync Error] {e}")
+
 @settings_bp.route("/settings/sync-youtube/<int:profile_id>", methods=["POST"])
 def sync_youtube(profile_id):
-    """Manually trigger sync for a YouTube profile."""
+    """Manually trigger sync for a YouTube profile (backgrounded)."""
     if not g.user_id:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"status": "error", "message": "Unauthorized"}), 401
@@ -177,23 +193,21 @@ def sync_youtube(profile_id):
     if profile.user_id != g.user_id or profile.platform != "youtube":
         return redirect(url_for("settings.settings"))
 
-    imported, errors = sync_youtube_channel(profile, user_id=g.user_id)
+    # Start the sync in the background
+    thread = threading.Thread(
+        target=run_sync_in_background,
+        args=(current_app._get_current_object(), profile.id, g.user_id),
+        daemon=True
+    )
+    thread.start()
     
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    msg = "Sync started! New videos will appear in your vault shortly."
     
-    if imported > 0:
-        msg = f"Imported {imported} new video(s) from YouTube!"
-        if is_ajax: return jsonify({"status": "success", "message": msg})
-        flash(msg, "success")
-    elif errors:
-        msg = f"Sync issue: {errors}"
-        if is_ajax: return jsonify({"status": "error", "message": msg})
-        flash(msg, "error")
-    else:
-        msg = "No new videos found to import."
-        if is_ajax: return jsonify({"status": "info", "message": msg})
-        flash(msg, "")
-        
+    if is_ajax:
+        return jsonify({"status": "success", "message": msg})
+    
+    flash(msg, "success")
     return redirect(url_for("settings.settings"))
 
 
@@ -274,3 +288,15 @@ def sync_youtube_channel(profile, user_id=None):
     return imported, ""
 
 
+# ─────────────────────────────────────────────────────────────
+# API USAGE ENDPOINT (for frontend quota display)
+# ─────────────────────────────────────────────────────────────
+
+@settings_bp.route("/api/usage")
+def api_usage():
+    """Returns JSON with per-API-type usage stats for the current user."""
+    if not g.user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    stats = get_usage_stats(g.user_id)
+    return jsonify(stats)

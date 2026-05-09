@@ -85,6 +85,9 @@
 
     <!-- Floating Input Pill -->
     <div class="chat-input-area">
+      <div id="chat-quota-info" style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem; text-align: center; display: none;">
+        <span id="chat-remaining-count"></span> credits remaining
+      </div>
       <div class="chat-form" style="width: 100%; max-width: 850px;">
         <div class="input-container">
           <textarea name="question" placeholder="Ask anything, or say 'Remember that...'" required rows="1"
@@ -465,6 +468,25 @@
     if (window.lucide) lucide.createIcons();
     setTimeout(() => toast.remove(), 5000);
   }
+  
+  async function updateChatQuota() {
+    try {
+      const resp = await fetch('/api/usage');
+      if (resp.ok) {
+        const stats = await resp.json();
+        const chatStats = stats['groq_chat'];
+        if (chatStats) {
+          const info = document.getElementById('chat-quota-info');
+          const count = document.getElementById('chat-remaining-count');
+          if (info && count) {
+            count.textContent = chatStats.limit - chatStats.used;
+            info.style.display = 'block';
+          }
+        }
+      }
+    } catch (e) {}
+  }
+  updateChatQuota();
 
   function typeTitle(el, text) {
     el.textContent = '';
@@ -510,6 +532,14 @@
 
       removeThinkingIndicator();
 
+      if (res.status === 429) {
+        const err = await res.json();
+        const retryAfter = res.headers.get('Retry-After');
+        let msg = '⏳ ' + (err.error || 'Credit limit reached. Please upgrade to continue.');
+        addMessage('assistant', msg, getTimeNow());
+        return;
+      }
+
       if (!res.ok) {
         const err = await res.json();
         addMessage('assistant', '⚠️ Error: ' + (err.error || 'Something went wrong'), getTimeNow());
@@ -517,6 +547,9 @@
       }
 
       const data = await res.json();
+      
+      // Update quota after message
+      updateChatQuota();
 
       // Show bot response
       addMessage('assistant', data.answer, getTimeNow());

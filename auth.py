@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 import re
-from supabase_client import supabase
+import firebase_client
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -25,8 +25,8 @@ def validate_email(email):
 @auth_bp.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
-        if supabase is None:
-            flash("Supabase is not configured. Please check your .env file.", "error")
+        if not firebase_client.FIREBASE_API_KEY:
+            flash("Firebase is not configured. Please check your .env file.", "error")
             return redirect(url_for("auth.signup"))
             
         name = request.form.get("name", "").strip()
@@ -48,38 +48,29 @@ def signup():
             return redirect(url_for("auth.signup"))
 
         try:
-            # Supabase Auth Signup
-            # We store the name in user_metadata
-            response = supabase.auth.sign_up({
-                "email": email,
-                "password": password,
-                "options": {
-                    "data": {"name": name}
-                }
-            })
+            print("DEBUG: Attempting signup via Firebase Auth")
+            response = firebase_client.sign_up(email, password, name)
             
-            if response.user:
-                # Signup successful
-                # Note: Supabase might require email confirmation depending on project settings.
-                # If confirmation is off, the user is logged in immediately.
-                if response.session:
-                    session["supabase_token"] = response.session.access_token
-                    session["user_id"] = response.user.id
-                    session["user_name"] = response.user.user_metadata.get("name", "Creator")
-                    flash("Signup successful!", "success")
-                    return redirect(url_for("settings.onboarding"))
-                else:
-                    flash("Please check your email to confirm your account.", "info")
-                    return redirect(url_for("auth.login"))
-            else:
-                flash("Signup failed. Please try again.", "error")
+            session["firebase_token"] = response["session"]["access_token"]
+            session["user_id"] = response["user"]["id"]
+            session["user_name"] = response["user"]["user_metadata"]["name"]
+            
+            flash("Signup successful!", "success")
+            return redirect(url_for("settings.onboarding"))
+            
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            with open("scratch/error.log", "w") as f:
+                f.write(traceback.format_exc())
             error_msg = str(e)
-            if "User already registered" in error_msg:
+            print(f"Signup error: {e}", flush=True)
+            
+            if "EMAIL_EXISTS" in error_msg:
                 flash("User already exists", "error")
             else:
-                print(f"Signup error: {e}")
-                flash("Error signing up. Please try again later.", "error")
+                flash(f"Signup Failed: {error_msg}", "error")
+                
             return redirect(url_for("auth.signup"))
 
     return render_template("signup.html")
@@ -87,8 +78,8 @@ def signup():
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        if supabase is None:
-            flash("Supabase is not configured. Please check your .env file.", "error")
+        if not firebase_client.FIREBASE_API_KEY:
+            flash("Firebase is not configured. Please check your .env file.", "error")
             return redirect(url_for("auth.login"))
             
         email = request.form.get("email", "").strip().lower()
@@ -99,21 +90,26 @@ def login():
             return redirect(url_for("auth.login"))
 
         try:
-            response = supabase.auth.sign_in_with_password({
-                "email": email,
-                "password": password
-            })
+            print("DEBUG: Attempting login via Firebase Auth")
+            response = firebase_client.sign_in_with_password(email, password)
             
-            if response.session and response.user:
-                session["supabase_token"] = response.session.access_token
-                session["user_id"] = response.user.id
-                session["user_name"] = response.user.user_metadata.get("name", "Creator")
-                return redirect(url_for("dashboard"))
-            else:
-                flash("Invalid email or password", "error")
+            session["firebase_token"] = response["session"]["access_token"]
+            session["user_id"] = response["user"]["id"]
+            session["user_name"] = response["user"]["user_metadata"]["name"]
+            
+            return redirect(url_for("dashboard"))
+            
         except Exception as e:
-            print(f"Login error: {e}")
-            flash("Invalid email or password", "error")
+            import traceback
+            traceback.print_exc()
+            error_msg = str(e)
+            print(f"Login error: {e}", flush=True)
+            
+            if "INVALID_LOGIN_CREDENTIALS" in error_msg or "INVALID_PASSWORD" in error_msg or "EMAIL_NOT_FOUND" in error_msg:
+                flash("Invalid email or password", "error")
+            else:
+                flash(f"Login Failed: {error_msg}", "error")
+                
             return redirect(url_for("auth.login"))
 
     return render_template("login.html")
@@ -121,7 +117,7 @@ def login():
 @auth_bp.route("/logout")
 def logout():
     try:
-        supabase.auth.sign_out()
+        firebase_client.sign_out()
     except:
         pass
     session.clear()

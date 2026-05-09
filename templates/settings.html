@@ -2,6 +2,31 @@
 {% block content %}
 <div style="max-width: 800px; margin: 0 auto;">
 
+    <!-- ═══════════════════════════════════════════════════════
+         API USAGE QUOTA CARD
+         ═══════════════════════════════════════════════════════ -->
+    <div class="page-header">
+        <h2><i data-lucide="gauge" width="24" height="24"></i> Credit Usage</h2>
+        <p>Your lifetime credits for the free account</p>
+    </div>
+
+    <div class="card mb-4" id="usage-card" style="animation: fadeInUp 0.4s ease 0.05s both;">
+        <div id="usage-loading" style="text-align: center; padding: 1.5rem 0; color: var(--text-muted);">
+            <i data-lucide="loader-2" class="spin" width="20" height="20"></i>
+            <span style="margin-left: 0.5rem;">Loading usage data...</span>
+        </div>
+        <div id="usage-grid" style="display: none; gap: 1.2rem;"></div>
+        <div id="usage-error" style="display: none; text-align: center; padding: 1rem; color: var(--text-muted);">
+            <i data-lucide="wifi-off" width="18" height="18"></i>
+            <span style="margin-left: 0.4rem;">Could not load usage data</span>
+        </div>
+    </div>
+
+    <hr style="border: none; border-top: 1px solid var(--border); margin: 2rem 0;">
+
+    <!-- ═══════════════════════════════════════════════════════
+         CONNECTED PROFILES
+         ═══════════════════════════════════════════════════════ -->
     <div class="page-header">
         <h2><i data-lucide="link" width="24" height="24"></i> Connected Profiles</h2>
         <p>Link your social media to auto-detect and import new content</p>
@@ -247,5 +272,70 @@
             }
         });
     });
+
+    // ─────────────────────────────────────────────────────
+    // API USAGE — Fetch & Render
+    // ─────────────────────────────────────────────────────
+    (async function loadUsageStats() {
+        const grid    = document.getElementById('usage-grid');
+        const loading = document.getElementById('usage-loading');
+        const errDiv  = document.getElementById('usage-error');
+
+        try {
+            const resp = await vaulty.fetch('/api/usage');
+            if (!resp.ok) throw new Error('Failed to fetch');
+            const stats = await resp.json();
+
+            let html = '';
+            for (const [key, s] of Object.entries(stats)) {
+                // Color logic: green ≤50%, yellow 51-80%, red >80%
+                let barColor, textColor;
+                if (s.percent <= 50) {
+                    barColor = 'linear-gradient(90deg, #22c55e, #4ade80)';
+                    textColor = '#4ade80';
+                } else if (s.percent <= 80) {
+                    barColor = 'linear-gradient(90deg, #eab308, #facc15)';
+                    textColor = '#facc15';
+                } else {
+                    barColor = 'linear-gradient(90deg, #ef4444, #f87171)';
+                    textColor = '#f87171';
+                }
+
+                html += `
+                <div class="usage-item" style="display: flex; flex-direction: column; gap: 0.4rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.9rem;">
+                            <i data-lucide="${s.icon}" width="16" height="16" style="color: var(--text-muted);"></i>
+                            ${s.label}
+                        </div>
+                        <div style="font-size: 0.82rem; color: var(--text-muted);">
+                            <span style="color: ${textColor}; font-weight: 600;">${s.used}</span> / ${s.limit}
+                        </div>
+                    </div>
+                    <div style="background: var(--border); border-radius: 999px; height: 8px; overflow: hidden;">
+                        <div style="
+                            width: ${s.percent}%;
+                            height: 100%;
+                            background: ${barColor};
+                            border-radius: 999px;
+                            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+                        "></div>
+                    </div>
+                </div>`;
+            }
+
+            grid.innerHTML = html;
+            grid.style.display = 'flex';
+            grid.style.flexDirection = 'column';
+            loading.style.display = 'none';
+
+            // Re-init Lucide icons for the newly injected DOM
+            if (window.lucide) lucide.createIcons();
+        } catch (e) {
+            loading.style.display = 'none';
+            errDiv.style.display = 'block';
+            if (window.lucide) lucide.createIcons();
+        }
+    })();
 </script>
 {% endblock %}

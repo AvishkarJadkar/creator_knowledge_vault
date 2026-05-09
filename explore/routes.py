@@ -39,7 +39,7 @@ def search():
         for r in results:
             combined_content += r["raw_text"] + "\n\n---\n\n"
         
-        summary = generate_summary(combined_content)
+        summary = generate_summary(combined_content, user_id=g.user_id)
     else:
         summary = "No results found to summarize."
 
