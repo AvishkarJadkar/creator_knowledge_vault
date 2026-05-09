@@ -6,7 +6,19 @@ from rate_limit import check_and_increment
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+_client = None
+
+def get_client():
+    """Lazy-initializes the Gemini client to avoid startup crashes if the key is missing."""
+    global _client
+    if _client is None:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            # We don't raise an error here so the app doesn't crash on startup.
+            # Instead, we'll return None and handle it in the functions.
+            return None
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 def get_embedding(text: str, user_id: str = None):
     """Generate a 768-dimensional embedding vector for the given text."""
@@ -24,6 +36,11 @@ def get_embedding(text: str, user_id: str = None):
         if not allowed:
             print(f"DEBUG: Rate limit exceeded for {user_id}: {msg}")
             return None
+    
+    client = get_client()
+    if not client:
+        print("DEBUG: Gemini API Key missing. Skipping embedding.")
+        return None
     
     try:
         result = client.models.embed_content(
@@ -85,6 +102,10 @@ def generate_summary(text: str, user_id: str = None) -> str:
     Research Summary:
     """
     
+    client = get_client()
+    if not client:
+        return "⚠️ Gemini API Key missing. Please check your server configuration."
+
     try:
         # Use more robust model name identifier
         response = client.models.generate_content(

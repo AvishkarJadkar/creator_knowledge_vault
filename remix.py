@@ -9,7 +9,17 @@ load_dotenv()
 
 remix_bp = Blueprint("remix", __name__)
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+_groq_client = None
+
+def get_groq_client():
+    """Lazy-initializes the Groq client."""
+    global _groq_client
+    if _groq_client is None:
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            return None
+        _groq_client = Groq(api_key=api_key)
+    return _groq_client
 
 PROMPTS = {
     "twitter": """You are a top-tier social media ghostwriter. Turn the content below into a viral Twitter/X thread.
@@ -102,6 +112,10 @@ YOUR OUTPUT (ready to copy-paste, no meta-commentary):"""
             if retry_after:
                 response.headers["Retry-After"] = str(retry_after)
             return response, 429
+
+        client = get_groq_client()
+        if not client:
+            return jsonify({"error": "Groq API Key missing. Please check your server configuration."}), 500
 
         try:
             response = client.chat.completions.create(

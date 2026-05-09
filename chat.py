@@ -13,7 +13,17 @@ from rate_limit import check_and_increment, roughly_count_tokens
 load_dotenv()
 
 chat_bp = Blueprint("chat", __name__)
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+_groq_client = None
+
+def get_groq_client():
+    """Lazy-initializes the Groq client."""
+    global _groq_client
+    if _groq_client is None:
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            return None
+        _groq_client = Groq(api_key=api_key)
+    return _groq_client
 
 def generate_chat_title(user_msg, bot_msg, user_id=None):
     """Uses LLM to generate a short, contextual chat title.
@@ -23,6 +33,10 @@ def generate_chat_title(user_msg, bot_msg, user_id=None):
         allowed, msg, _ = check_and_increment(user_id, "groq_chat")
         if not allowed:
             return user_msg[:50]  # Graceful fallback — use raw text
+    client = get_groq_client()
+    if not client:
+        return user_msg[:50]
+
     try:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -57,6 +71,10 @@ USER MESSAGE:
 {text}
 
 EXTRACTED FACT:"""
+    client = get_groq_client()
+    if not client:
+        return None
+
     try:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -269,6 +287,10 @@ def send_message(session_id):
         llm_messages.append({"role": "system", "content": f"[SYSTEM NOTE: You just saved this fact to your long-term memory: '{memory_saved_fact}'. Confirm this to the user in your response.]"})
 
     # 6. Call LLM
+    client = get_groq_client()
+    if not client:
+        return jsonify({"error": "Groq API Key missing. Please check your server configuration."}), 500
+
     try:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
