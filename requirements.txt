@@ -5,6 +5,7 @@ werkzeug
 pypdf
 python-dotenv
 youtube-transcript-api
+yt-dlp
 groq
 feedparser
 gunicorn
