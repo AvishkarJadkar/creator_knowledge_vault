@@ -1,0 +1,5 @@
+# Keep container/Linux files LF even on Windows checkouts.
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+*.sh text eol=lf
+Procfile text eol=lf
