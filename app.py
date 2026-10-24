@@ -104,10 +104,15 @@ def ensure_schema_upgrades():
             ))
 
 
-# Create DB tables on startup
-with app.app_context():
-    db.create_all()
-    ensure_schema_upgrades()
+# Create DB tables on startup. Wrapped in try/except so a transient database
+# outage during a cold start doesn't crash the whole module (which would take
+# /health down with it and make the deploy look broken).
+try:
+    with app.app_context():
+        db.create_all()
+        ensure_schema_upgrades()
+except Exception:
+    app.logger.exception("Database initialisation failed at startup")
 
 # --- AUTH MIDDLEWARE: Validate Firebase Session ---
 @app.before_request
@@ -186,7 +191,14 @@ def csrf_error(error):
 
 @app.route("/health")
 def health():
-    return {"status": "ok"}, 200
+    # Actually touch the database so platform health checks fail loudly when
+    # the app can boot but cannot reach its database.
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        return {"status": "ok"}, 200
+    except Exception:
+        app.logger.exception("Health check failed")
+        return {"status": "error", "database": "unavailable"}, 503
 
 @app.route("/")
 def home():
