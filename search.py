@@ -1,10 +1,34 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for, g, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, g, jsonify
 from extensions import db
 from models import Content, Embedding
 from ai import get_embedding, cosine_similarity
 import json
 
 search_bp = Blueprint("search", __name__)
+
+
+def build_snippet(body, query, radius=80):
+    """Return a short excerpt centred on the first match of `query`.
+
+    Semantic results often don't contain the literal query, in which case we
+    fall back to the beginning of the document.
+    """
+    body = body or ""
+    query = query or ""
+
+    if query:
+        pos = body.lower().find(query.lower())
+        if pos != -1:
+            start = max(pos - radius, 0)
+            end = min(pos + len(query) + radius, len(body))
+            snippet = body[start:end]
+            if start > 0:
+                snippet = "..." + snippet
+            if end < len(body):
+                snippet += "..."
+            return snippet
+
+    return body[:200] + ("..." if len(body) > 200 else "")
 
 @search_bp.route("/search", methods=["GET", "POST"])
 def search():
@@ -70,15 +94,21 @@ def search():
                     Content.title.ilike(f"%{safe_query}%")
                 ).all()
 
+    # --- Server-side render: attach snippets once, so the template and the
+    # AJAX response show exactly the same excerpt (including semantic matches
+    # that don't contain the literal query).
+    for c in results:
+        c.snippet = build_snippet(c.body, query)
+
     # --- AJAX Response ---
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return jsonify({
             "results": [{
                 "id": c.id,
                 "title": c.title,
-                "body_snippet": c.body[:200] + "..." if len(c.body) > 200 else c.body,
+                "body_snippet": c.snippet,
                 "content_type": c.content_type,
-                "created_at": c.created_at.strftime("%b %d, %Y")
+                "created_at": c.created_at.strftime("%b %d, %Y") if c.created_at else ""
             } for c in results],
             "query": query
         })

@@ -8,7 +8,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-from flask import Flask, redirect, url_for, session, render_template, request, g
+from flask import Flask, redirect, url_for, session, render_template, request, g, jsonify
 from werkzeug.middleware.proxy_fix import ProxyFix
 from extensions import db
 from auth import auth_bp
@@ -18,7 +18,7 @@ from chat import chat_bp
 from remix import remix_bp
 from settings import settings_bp
 from explore import explore_bp
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"), static_folder=os.path.join(BASE_DIR, "static"))
 
@@ -131,6 +131,58 @@ def set_security_headers(response):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
+
+
+# --- ERROR HANDLERS: friendly pages, JSON for AJAX ---
+def _wants_json():
+    return (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or request.accept_mimetypes.best == "application/json"
+    )
+
+
+@app.errorhandler(404)
+def not_found(error):
+    if _wants_json():
+        return jsonify({"error": "Not found"}), 404
+    return render_template(
+        "error.html", code=404, title="Page not found",
+        message="The page you're looking for doesn't exist.",
+    ), 404
+
+
+@app.errorhandler(413)
+def payload_too_large(error):
+    if _wants_json():
+        return jsonify({"error": "Upload too large (max 16 MB)."}), 413
+    return render_template(
+        "error.html", code=413, title="Upload too large",
+        message="That file is larger than the 16 MB limit.",
+    ), 413
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    if _wants_json():
+        return jsonify({"error": "Something went wrong. Please try again."}), 500
+    return render_template(
+        "error.html", code=500, title="Something went wrong",
+        message="An unexpected error occurred. Please try again.",
+    ), 500
+
+
+@app.errorhandler(CSRFError)
+def csrf_error(error):
+    if _wants_json():
+        return jsonify({"error": "Your session expired. Please refresh the page and try again."}), 400
+    return render_template(
+        "error.html", code=400, title="Session expired",
+        message="Your session expired. Please refresh the page and try again.",
+    ), 400
 
 @app.route("/health")
 def health():

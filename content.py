@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, g
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g, current_app
 from extensions import db
 from models import Content
 from pypdf import PdfReader
@@ -17,6 +17,9 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # --- SECURITY: Allowed file extensions ---
 ALLOWED_EXTENSIONS = {".txt", ".pdf"}
 
+# Content types the UI can create. "youtube" is assigned server-side.
+ALLOWED_CONTENT_TYPES = {"note", "idea", "pdf", "youtube"}
+
 
 def allowed_file(filename):
     """Check if the file extension is allowed."""
@@ -24,9 +27,16 @@ def allowed_file(filename):
 
 
 def extract_text(file):
-    filename = file.filename.lower()
+    filename = (file.filename or "").lower()
     if filename.endswith(".txt"):
-        return file.read().decode("utf-8")
+        raw = file.read()
+        # Try the common encodings before falling back to a lossless one.
+        for encoding in ("utf-8-sig", "utf-16", "cp1252", "latin-1"):
+            try:
+                return raw.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+        return raw.decode("utf-8", errors="replace")
 
     if filename.endswith(".pdf"):
         reader = PdfReader(file)
@@ -56,6 +66,13 @@ def add_content():
             flash("Content type is required", "error")
             return redirect(url_for("content.add_content"))
 
+        # Only allow the types the UI actually offers (plus YouTube, which is
+        # set server-side below). Anything else would render an unstyled badge
+        # and pollute the vault with arbitrary strings.
+        if content_type not in ALLOWED_CONTENT_TYPES:
+            flash("Please choose a valid content type", "error")
+            return redirect(url_for("content.add_content"))
+
         # --- SECURITY: Limit body size (500KB of text) ---
         if len(body) > 500_000:
             flash("Content is too large. Maximum 500KB of text allowed.", "error")
@@ -83,7 +100,13 @@ def add_content():
             if not allowed_file(file.filename):
                 flash("Only .txt and .pdf files are allowed", "error")
                 return redirect(url_for("content.add_content"))
-            body = extract_text(file)
+            try:
+                body = extract_text(file)
+            except Exception as e:
+                # Corrupt PDFs, encrypted files, etc. must not 500.
+                current_app.logger.warning("File extraction failed: %s", e)
+                flash("Could not read that file. Please upload a valid .txt or .pdf.", "error")
+                return redirect(url_for("content.add_content"))
 
         if not body:
             flash("No content provided. Please enter text, upload a file, or provide a YouTube URL.", "error")
@@ -166,11 +189,19 @@ def restore_all():
     if not g.user_id:
         return jsonify({"success": False, "error": "Unauthorized"}), 401
     
-    data = request.get_json()
-    if not data or "content_ids" not in data:
+    data = request.get_json(silent=True) or {}
+    content_ids = data.get("content_ids")
+    if not isinstance(content_ids, list) or not content_ids:
         return jsonify({"success": False, "error": "Invalid request"}), 400
-    
-    content_ids = data["content_ids"]
-    Content.query.filter(Content.id.in_(content_ids), Content.user_id == g.user_id).update({"is_deleted": False}, synchronize_session=False)
+
+    try:
+        content_ids = [int(cid) for cid in content_ids]
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Invalid request"}), 400
+
+    Content.query.filter(
+        Content.id.in_(content_ids),
+        Content.user_id == g.user_id
+    ).update({"is_deleted": False}, synchronize_session=False)
     db.session.commit()
     return jsonify({"success": True})

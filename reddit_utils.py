@@ -6,7 +6,7 @@ import time
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 import re
 
 # Mocking the agents.py functionality for self-containment
@@ -102,6 +102,12 @@ class RedditScraper:
                 headers={"Authorization": f"bearer {token}"},
                 timeout=self.timeout,
             )
+
+        # Public reddit.com endpoints need an explicit `.json` suffix —
+        # otherwise they return an HTML page and response.json() fails.
+        if not path.endswith(".json"):
+            path = f"{path}.json"
+
         return self.session.get(
             f"https://www.reddit.com{path}",
             params=params,

@@ -195,9 +195,13 @@
               </button>
             </div>
             <hr>
-            <pre id="remix-output" class="remix-output">${data.output.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+            <pre id="remix-output" class="remix-output"></pre>
           </div>
         `;
+
+        // Insert AI output as text (never as HTML).
+        const outputEl = document.getElementById('remix-output');
+        if (outputEl) outputEl.textContent = data.output || '';
         
         // Scroll to output smoothly
         container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

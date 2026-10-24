@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify, g
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, g
 from .providers import PROVIDERS
 from ai import generate_summary
 

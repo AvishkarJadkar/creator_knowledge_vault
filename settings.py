@@ -3,6 +3,7 @@ import feedparser
 import urllib.request
 from urllib.parse import urlparse
 import json
+import requests
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from extensions import db
 from models import SocialProfile, Content, Embedding
@@ -250,7 +251,11 @@ def sync_youtube_channel(profile, user_id=None):
     print(f"[Sync] Fetching RSS: {rss_url}")
 
     try:
-        feed = feedparser.parse(rss_url)
+        # feedparser's URL mode uses urllib without a timeout, which can hang
+        # a background sync thread forever. Fetch with an explicit timeout.
+        response = requests.get(rss_url, timeout=10)
+        response.raise_for_status()
+        feed = feedparser.parse(response.content)
     except Exception as e:
         return 0, f"Failed to fetch RSS feed: {e}"
 

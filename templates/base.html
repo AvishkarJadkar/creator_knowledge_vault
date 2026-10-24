@@ -88,7 +88,10 @@
           border: 2px solid var(--bg);
         "></span>
       </a>
-      <a href="/logout" class="btn btn-sm btn-outline"><i data-lucide="log-out" width="14" height="14"></i> Logout</a>
+      <form action="{{ url_for('auth.logout') }}" method="post" style="display: inline-flex; margin: 0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline"><i data-lucide="log-out" width="14" height="14"></i> Logout</button>
+      </form>
       {% else %}
       <a href="/login"><i data-lucide="log-in" width="16" height="16"></i> <span>Login</span></a>
       <a href="/signup"><i data-lucide="user-plus" width="16" height="16"></i> <span>Sign up</span></a>
