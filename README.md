@@ -20,7 +20,7 @@ Currently live at: [https://vaultyai.onrender.com](https://vaultyai.onrender.com
 * **Database:** PostgreSQL (production), SQLite (local) & SQLAlchemy (ORM)
 * **Search & AI Models:** Groq API (LLM generation) & Google GenAI (Semantic search & Embeddings)
 * **Data Ingestion:** `youtube-transcript-api`, `yt-dlp`, `feedparser`
-* **Deployment Platform:** Docker / Northflank (always-on free tier) · Render & Railway configs included
+* **Deployment Platform:** Render (free web service) + Neon Postgres, with a GitHub Actions keep-alive · Docker, Railway & Vercel configs included
 
 ---
 
@@ -107,38 +107,49 @@ Follow these steps to get Vaulty AI running on your local machine.
 ## Deployment (production)
 
 The app ships as a container (`Dockerfile`) and also includes platform configs
-for **Northflank** (recommended), **Render** (`render.yaml`), **Railway**
-(`railway.json` / `Procfile`) and **Vercel** (`vercel.json`).
+for **Render** (`render.yaml`), **Railway** (`railway.json` / `Procfile`) and
+**Vercel** (`vercel.json`).
 
-### Why Northflank
+### Recommended free setup: Render + Neon
 
-| | Northflank Sandbox | Render Free |
+Nothing here requires a credit card.
+
+| Piece | Service | Free allowance |
 | --- | --- | --- |
-| Sleeps when idle | **No — always on** | Yes, after 15 min (~1 min cold start) |
-| Free database | 1 addon included, no expiry | Postgres expires after 30 days |
-| Credit card | Not required | Not required |
-| Included compute | Up to $20/mo of resources | 750 instance hours/mo |
-| Custom domain + TLS | Included | Included |
+| Web app | Render web service (`render.yaml`) | 750 instance hours/mo, 0.1 CPU / 512 MB |
+| Database | [Neon](https://neon.com) Postgres | 1 GB storage, 100 CU-hours/mo, no expiry |
+| Keep-alive | GitHub Actions (`.github/workflows/keepalive.yml`) | unlimited on public repos |
 
-Sandbox limits: 2 services, 2 jobs, 1 database, 1 project. That is enough for
-this app (one web service + one Postgres).
+Two Render free-tier behaviours are handled by the config in this repo:
 
-### Deploy on Northflank (no card)
+1. **15-minute spin-down.** The keep-alive workflow pings `/` every 5 minutes,
+   so the service never idles long enough to sleep. That costs ~744 of the 750
+   monthly instance hours, so the app stays up but has little headroom left —
+   drop the schedule to office hours if Render ever suspends the service.
+2. **Free Postgres expires after 30 days.** That is why the database lives on
+   Neon instead of Render. Neon suspends idle compute and resumes in ~0.5 s,
+   and the keep-alive ping deliberately hits `/` (not `/health`) so the
+   database is allowed to sleep and stay inside the 100 CU-hour allowance.
 
-1. Sign up at <https://app.northflank.com/signup> and create a project.
-2. **Add a PostgreSQL addon** to the project (1 GB is plenty), then copy its
-   connection string.
-3. **Create a service** → *Combined* → *Build from repository* → connect GitHub
-   → pick this repo and the `main` branch.
-4. Build settings: **Dockerfile** (path `Dockerfile`), build context `/`.
-5. Set the service's internal port to **8000** and the health check path to
-   **`/health`**.
-6. Add the environment variables from the table below (`DATABASE_URL` = the
-   addon's connection string).
-7. Deploy. The first build installs the pinned dependencies (~2–4 min).
+### Deploy on Render
 
-The container runs:
-`gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 --preload`
+1. Sign up at <https://dashboard.render.com/register> (GitHub login, no card).
+2. Create a Neon project at <https://neon.com/signup> and copy its connection
+   string (`postgresql://…?sslmode=require`).
+3. In Render: **New → Blueprint**, pick this repository and the `main` branch.
+   `render.yaml` creates the web service.
+4. Fill in the `sync: false` environment variables when prompted (see the table
+   below); `DATABASE_URL` is the Neon connection string.
+5. Set the repository variable `VAULTY_URL` (Settings → Secrets and variables →
+   Actions → Variables) to the Render URL so the keep-alive job knows what to
+   ping.
+
+The service runs:
+`gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 --preload`
+
+A single worker with threads keeps the process inside the 512 MB free
+instance; the container image (`Dockerfile`) uses 2 workers for hosts with
+more memory.
 
 ### Environment variables
 
@@ -168,31 +179,16 @@ docker build -t vaulty .
 docker run --rm -p 8000:8000 --env-file .env -e FLASK_ENV=development vaulty
 ```
 
-### Render (free tier)
+### Render (free tier) — notes
 
-`render.yaml` deploys the service and a Postgres database in one blueprint.
-Two free-tier caveats: web services **spin down after 15 minutes** of no
-traffic, and free Postgres **expires after 30 days**.
-
-A keep-alive ping every 10 minutes prevents the spin-down (750 free instance
-hours ≈ a full month of one always-on service), e.g. a GitHub Actions schedule:
-
-```yaml
-on:
-  schedule: [{ cron: "*/10 * * * *" }]
-jobs:
-  ping:
-    runs-on: ubuntu-latest
-    steps:
-      - run: curl -fsS https://YOUR-SERVICE.onrender.com/health
-```
-
-That does not fix the database expiry — pair it with a free Postgres from
-Neon/Supabase, or use Northflank/Railway instead.
+`render.yaml` deploys the web service only; the database is external (Neon).
+Render's own free Postgres expires 30 days after creation, so it is not used.
+Free web services still spin down after 15 minutes without traffic, which the
+keep-alive workflow above prevents.
 
 > **Vercel:** `vercel.json` is included, but serverless functions have no
 > persistent filesystem, so uploads and background YouTube syncs won't work.
-> Use Northflank, Render or Railway with PostgreSQL for the full feature set.
+> Use Render or Railway with PostgreSQL for the full feature set.
 
 ## Contributing
 

@@ -1,0 +1,36 @@
+name: Keep the free Render service awake
+
+# Render spins a Free web service down after 15 minutes without traffic, and the
+# next request then waits ~1 minute for it to boot. Pinging the landing page
+# every 5 minutes keeps it warm, so visitors never hit a cold start.
+#
+# This hits "/" rather than "/health" on purpose: /health queries Postgres, and
+# keeping the database awake 24/7 would burn through Neon's free CU-hours.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping
+        run: |
+          url="${{ vars.VAULTY_URL }}"
+          if [ -z "$url" ]; then
+            echo "VAULTY_URL repository variable is not set" >&2
+            exit 1
+          fi
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 --retry 2 --retry-delay 10 "$url/")
+          echo "GET $url/ -> $code"
+          test "$code" -lt 500

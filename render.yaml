@@ -2,8 +2,11 @@ services:
   - type: web
     name: vaulty
     runtime: python
+    region: singapore
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 --preload
+    # Free instances get 0.1 CPU / 512 MB, so run a single worker with threads.
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 --preload
     healthCheckPath: /health
     envVars:
       - key: FLASK_ENV
@@ -24,13 +27,7 @@ services:
         sync: false
       - key: PYTHON_VERSION
         value: 3.11.6
+      # External Postgres (Neon free tier). Render's own free Postgres expires
+      # after 30 days, so the database is provisioned elsewhere.
       - key: DATABASE_URL
-        fromDatabase:
-          name: vaulty-db
-          property: connectionString
-
-databases:
-  - name: vaulty-db
-    plan: free
-    databaseName: vaulty
-    user: vaulty_user
+        sync: false
