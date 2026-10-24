@@ -20,7 +20,7 @@ Currently live at: [https://vaultyai.onrender.com](https://vaultyai.onrender.com
 * **Database:** PostgreSQL (production), SQLite (local) & SQLAlchemy (ORM)
 * **Search & AI Models:** Groq API (LLM generation) & Google GenAI (Semantic search & Embeddings)
 * **Data Ingestion:** `youtube-transcript-api`, `yt-dlp`, `feedparser`
-* **Deployment Platform:** Render (Web Service) / Vercel (Configuration included)
+* **Deployment Platform:** Docker / Northflank (always-on free tier) · Render & Railway configs included
 
 ---
 
@@ -106,19 +106,47 @@ Follow these steps to get Vaulty AI running on your local machine.
 
 ## Deployment (production)
 
-Deploy configs are included for **Render** (`render.yaml`), **Railway**
-(`railway.json` / `Procfile`) and **Vercel** (`vercel.json`). The app exposes
-`GET /health`, which checks the database and returns `200 {"status":"ok"}` or
-`503` — point your platform's health check at it (already configured in
-`render.yaml` and `railway.json`).
+The app ships as a container (`Dockerfile`) and also includes platform configs
+for **Northflank** (recommended), **Render** (`render.yaml`), **Railway**
+(`railway.json` / `Procfile`) and **Vercel** (`vercel.json`).
 
-Set these environment variables on the host:
+### Why Northflank
+
+| | Northflank Sandbox | Render Free |
+| --- | --- | --- |
+| Sleeps when idle | **No — always on** | Yes, after 15 min (~1 min cold start) |
+| Free database | 1 addon included, no expiry | Postgres expires after 30 days |
+| Credit card | Not required | Not required |
+| Included compute | Up to $20/mo of resources | 750 instance hours/mo |
+| Custom domain + TLS | Included | Included |
+
+Sandbox limits: 2 services, 2 jobs, 1 database, 1 project. That is enough for
+this app (one web service + one Postgres).
+
+### Deploy on Northflank (no card)
+
+1. Sign up at <https://app.northflank.com/signup> and create a project.
+2. **Add a PostgreSQL addon** to the project (1 GB is plenty), then copy its
+   connection string.
+3. **Create a service** → *Combined* → *Build from repository* → connect GitHub
+   → pick this repo and the `main` branch.
+4. Build settings: **Dockerfile** (path `Dockerfile`), build context `/`.
+5. Set the service's internal port to **8000** and the health check path to
+   **`/health`**.
+6. Add the environment variables from the table below (`DATABASE_URL` = the
+   addon's connection string).
+7. Deploy. The first build installs the pinned dependencies (~2–4 min).
+
+The container runs:
+`gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 --preload`
+
+### Environment variables
 
 | Variable | Required | Notes |
 | --- | --- | --- |
 | `FLASK_ENV` | ✅ | Set to `production`. Enables secure cookies and HTTPS redirects. |
 | `SECRET_KEY` | ✅ | Long random string. The app refuses to boot without it in production. |
-| `DATABASE_URL` | ✅ | PostgreSQL connection string (Render's blueprint wires this automatically). |
+| `DATABASE_URL` | ✅ | PostgreSQL connection string. |
 | `GROQ_API_KEY` | ✅ | Chat, Remix and chat titles. |
 | `GEMINI_API_KEY` | ✅ | Embeddings + Explore summaries. |
 | `FIREBASE_API_KEY` | ✅ | Signup/login. Without it auth is disabled. |
@@ -129,13 +157,42 @@ Model names can be overridden without code changes:
 `GROQ_CHAT_MODEL`, `GROQ_FAST_MODEL`, `GEMINI_MODEL`, `GEMINI_EMBED_MODEL`.
 
 Dependencies are pinned in `requirements.txt` to the versions this release was
-tested with, and Python is pinned to 3.11.6 (`.python-version`, `render.yaml`).
+tested with, and Python is pinned to 3.11.6 (`.python-version`, `Dockerfile`).
 Database tables are created on the first request, so a fresh Postgres instance
 needs no manual migration step.
 
+### Run the production image locally
+
+```bash
+docker build -t vaulty .
+docker run --rm -p 8000:8000 --env-file .env -e FLASK_ENV=development vaulty
+```
+
+### Render (free tier)
+
+`render.yaml` deploys the service and a Postgres database in one blueprint.
+Two free-tier caveats: web services **spin down after 15 minutes** of no
+traffic, and free Postgres **expires after 30 days**.
+
+A keep-alive ping every 10 minutes prevents the spin-down (750 free instance
+hours ≈ a full month of one always-on service), e.g. a GitHub Actions schedule:
+
+```yaml
+on:
+  schedule: [{ cron: "*/10 * * * *" }]
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS https://YOUR-SERVICE.onrender.com/health
+```
+
+That does not fix the database expiry — pair it with a free Postgres from
+Neon/Supabase, or use Northflank/Railway instead.
+
 > **Vercel:** `vercel.json` is included, but serverless functions have no
 > persistent filesystem, so uploads and background YouTube syncs won't work.
-> Use Render or Railway with PostgreSQL for the full feature set.
+> Use Northflank, Render or Railway with PostgreSQL for the full feature set.
 
 ## Contributing
 

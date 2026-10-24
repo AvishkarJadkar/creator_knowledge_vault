@@ -1,0 +1,34 @@
+# Never bake local secrets or state into the image.
+.env
+.env.*
+!.env.example
+
+# Local state
+instance/
+uploads/
+*.db
+
+# Dev tooling / VCS
+.git/
+.gitignore
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+.gemini/
+scratch/
+tests/
+
+# Platform configs for other hosts
+render.yaml
+railway.json
+vercel.json
+Procfile
+README.md
+Dockerfile
+.dockerignore
