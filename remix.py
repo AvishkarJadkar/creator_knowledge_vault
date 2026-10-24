@@ -1,14 +1,26 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, g
 from models import Content
 from dotenv import load_dotenv
 import os
 from groq import Groq
+from ai import GROQ_CHAT_MODEL
+from rate_limit import check_and_increment, refund_usage, roughly_count_tokens
 
 load_dotenv()
 
 remix_bp = Blueprint("remix", __name__)
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+_groq_client = None
+
+def get_groq_client():
+    """Lazy-initializes the Groq client."""
+    global _groq_client
+    if _groq_client is None:
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            return None
+        _groq_client = Groq(api_key=api_key)
+    return _groq_client
 
 PROMPTS = {
     "twitter": """You are a top-tier social media ghostwriter. Turn the content below into a viral Twitter/X thread.
@@ -65,12 +77,14 @@ RULES:
 
 @remix_bp.route("/remix/<int:content_id>", methods=["GET", "POST"])
 def remix(content_id):
-    if "user_id" not in session:
+    if not g.user_id:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"error": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
 
-    content = Content.query.filter_by(id=content_id, is_deleted=False).first_or_404()
+    content = Content.query.filter_by(
+        id=content_id, user_id=g.user_id, is_deleted=False
+    ).first_or_404()
 
 
     output = None
@@ -85,15 +99,31 @@ def remix(content_id):
             return render_template("remix.html", content=content, output="Invalid remix type selected.")
 
         prompt = f"""{PROMPTS[remix_type]}
-
-CONTENT TO REMIX:
 {content.body[:2000]}
 
 YOUR OUTPUT (ready to copy-paste, no meta-commentary):"""
 
+        # --- SECURITY: Limit tokens ---
+        tokens = roughly_count_tokens(prompt)
+        if tokens > 3000:
+             return jsonify({"error": f"Content too long (approx {tokens} tokens). Maximum 3,000 tokens."}), 400
+
+        # --- Check configuration before spending the user's quota ---
+        client = get_groq_client()
+        if not client:
+            return jsonify({"error": "Groq API Key missing. Please check your server configuration."}), 500
+
+        # --- RATE LIMITING: Per-user daily and burst ---
+        allowed, msg, retry_after = check_and_increment(g.user_id, "groq_remix")
+        if not allowed:
+            response = jsonify({"error": msg})
+            if retry_after:
+                response.headers["Retry-After"] = str(retry_after)
+            return response, 429
+
         try:
             response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model=GROQ_CHAT_MODEL,
                 messages=[
                     {"role": "system", "content": "You are a world-class content creator. Your output is always polished, engaging, and ready to publish. Never add disclaimers, explanations, or meta-commentary. Just deliver the content."},
                     {"role": "user", "content": prompt}
@@ -103,6 +133,8 @@ YOUR OUTPUT (ready to copy-paste, no meta-commentary):"""
             )
             output = response.choices[0].message.content
         except Exception as e:
+            # The provider call failed — don't charge the user for it.
+            refund_usage(g.user_id, "groq_remix")
             # --- SECURITY: Don't expose internal errors ---
             print(f"Remix error: {e}")
             output = "Something went wrong while remixing. Please try again."

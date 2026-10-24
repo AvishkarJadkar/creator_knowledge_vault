@@ -9,8 +9,9 @@
     <div class="card" style="animation: fadeInUp 0.5s ease both;">
         <div class="flex justify-between items-center mb-4">
             <h2 style="margin: 0;">{{ content.title }}</h2>
-            <span class="badge badge-{{ content.content_type }}">
-                {{ content.content_type }}
+            {% set badge_type = content.content_type if content.content_type in ['note', 'idea', 'pdf', 'youtube', 'reddit'] else 'note' %}
+            <span class="badge badge-{{ badge_type }}">
+                {{ content.content_type or 'note' }}
             </span>
         </div>
 

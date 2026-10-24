@@ -1,18 +1,47 @@
 import re
 import feedparser
 import urllib.request
-from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
+from urllib.parse import urlparse
+import json
+import requests
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from extensions import db
 from models import SocialProfile, Content, Embedding
 from youtube_utils import get_youtube_transcript
 from ai import get_embedding
-import json
+from rate_limit import get_usage_stats
 
 settings_bp = Blueprint("settings", __name__)
+
+# Only these hosts may be fetched when resolving a channel ID. Without this
+# allowlist the endpoint could be used as an SSRF proxy (e.g. to reach
+# http://169.254.169.254/ metadata services).
+ALLOWED_YOUTUBE_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+}
+
+
+def _is_allowed_youtube_url(url):
+    """Return True only for http(s) URLs on a YouTube host."""
+    try:
+        parsed = urlparse(url)
+    except (ValueError, AttributeError):
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    return (parsed.hostname or "").lower() in ALLOWED_YOUTUBE_HOSTS
 
 
 def resolve_channel_id(url):
     """Resolve a YouTube URL to a channel ID by fetching the page and extracting it."""
+    # Reject anything that is not a YouTube URL before making a request.
+    if not _is_allowed_youtube_url(url):
+        print("Blocked channel resolve for non-YouTube URL")
+        return None
+
     try:
         # If already a channel ID URL
         match = re.search(r'youtube\.com/channel/(UC[\w-]+)', url)
@@ -22,7 +51,11 @@ def resolve_channel_id(url):
         # For handles (@username) or custom URLs, fetch the page to find channel ID
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as resp:
-            html = resp.read().decode('utf-8', errors='ignore')
+            # A redirect could point anywhere — re-check the final host.
+            if not _is_allowed_youtube_url(resp.geturl()):
+                print("Blocked channel resolve after redirect")
+                return None
+            html = resp.read(1024 * 1024).decode('utf-8', errors='ignore')
 
         # Look for channel ID in the page source
         match = re.search(r'"channelId":"(UC[\w-]+)"', html)
@@ -46,20 +79,20 @@ def resolve_channel_id(url):
 
 @settings_bp.route("/settings", methods=["GET"])
 def settings():
-    if "user_id" not in session:
+    if not g.user_id:
         return redirect(url_for("auth.login"))
 
-    profiles = SocialProfile.query.filter_by(user_id=session["user_id"]).all()
+    profiles = SocialProfile.query.filter_by(user_id=g.user_id).all()
     return render_template("settings.html", profiles=profiles)
 
 
 @settings_bp.route("/onboarding", methods=["GET"])
 def onboarding():
-    if "user_id" not in session:
+    if not g.user_id:
         return redirect(url_for("auth.login"))
     
     # If they already have a profile, skip onboarding
-    existing = SocialProfile.query.filter_by(user_id=session["user_id"]).first()
+    existing = SocialProfile.query.filter_by(user_id=g.user_id).first()
     if existing:
         return redirect(url_for("dashboard"))
         
@@ -68,7 +101,7 @@ def onboarding():
 
 @settings_bp.route("/settings/add-profile", methods=["POST"])
 def add_profile():
-    if "user_id" not in session:
+    if not g.user_id:
         return redirect(url_for("auth.login"))
 
     platform = request.form.get("platform", "").strip()
@@ -98,7 +131,7 @@ def add_profile():
 
     # Check for duplicate
     existing = SocialProfile.query.filter_by(
-        user_id=session["user_id"],
+        user_id=g.user_id,
         platform=platform,
         profile_url=profile_url
     ).first()
@@ -118,10 +151,11 @@ def add_profile():
             return redirect(url_for("settings.settings"))
 
     profile = SocialProfile(
-        user_id=session["user_id"],
+        user_id=g.user_id,
         platform=platform,
         profile_url=profile_url,
-        channel_id=channel_id,
+        channel_id=channel_id or "",
+        last_synced_video="",
     )
     db.session.add(profile)
     db.session.commit()
@@ -138,18 +172,22 @@ def add_profile():
         })
 
     flash(f"{platform.title()} profile linked successfully!", "success")
+    # The onboarding wizard sends next=dashboard so finishing setup lands the
+    # user in their (now auto-populated) vault instead of the settings page.
+    if request.form.get("next") == "dashboard":
+        return redirect(url_for("dashboard"))
     return redirect(url_for("settings.settings"))
 
 
 @settings_bp.route("/settings/remove-profile/<int:profile_id>", methods=["POST"])
 def remove_profile(profile_id):
-    if "user_id" not in session:
+    if not g.user_id:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"status": "error", "message": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
 
     profile = SocialProfile.query.get_or_404(profile_id)
-    if profile.user_id != session["user_id"]:
+    if profile.user_id != g.user_id:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"status": "error", "message": "Unauthorized"}), 401
         return redirect(url_for("settings.settings"))
@@ -165,39 +203,50 @@ def remove_profile(profile_id):
     return redirect(url_for("settings.settings"))
 
 
+import threading
+from flask import current_app
+
+def run_sync_in_background(app, profile_id, user_id):
+    """Wrapper to run sync in a separate thread with the app context."""
+    with app.app_context():
+        profile = SocialProfile.query.get(profile_id)
+        if profile:
+            try:
+                sync_youtube_channel(profile, user_id=user_id)
+            except Exception as e:
+                print(f"[Background Sync Error] {e}")
+
 @settings_bp.route("/settings/sync-youtube/<int:profile_id>", methods=["POST"])
 def sync_youtube(profile_id):
-    """Manually trigger sync for a YouTube profile."""
-    if "user_id" not in session:
+    """Manually trigger sync for a YouTube profile (backgrounded)."""
+    if not g.user_id:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"status": "error", "message": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
 
     profile = SocialProfile.query.get_or_404(profile_id)
-    if profile.user_id != session["user_id"] or profile.platform != "youtube":
+    if profile.user_id != g.user_id or profile.platform != "youtube":
         return redirect(url_for("settings.settings"))
 
-    imported, errors = sync_youtube_channel(profile)
+    # Start the sync in the background
+    thread = threading.Thread(
+        target=run_sync_in_background,
+        args=(current_app._get_current_object(), profile.id, g.user_id),
+        daemon=True
+    )
+    thread.start()
     
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    msg = "Sync started! New videos will appear in your vault shortly."
     
-    if imported > 0:
-        msg = f"Imported {imported} new video(s) from YouTube!"
-        if is_ajax: return jsonify({"status": "success", "message": msg})
-        flash(msg, "success")
-    elif errors:
-        msg = f"Sync issue: {errors}"
-        if is_ajax: return jsonify({"status": "error", "message": msg})
-        flash(msg, "error")
-    else:
-        msg = "No new videos found to import."
-        if is_ajax: return jsonify({"status": "info", "message": msg})
-        flash(msg, "")
-        
+    if is_ajax:
+        return jsonify({"status": "success", "message": msg})
+    
+    flash(msg, "success")
     return redirect(url_for("settings.settings"))
 
 
-def sync_youtube_channel(profile):
+def sync_youtube_channel(profile, user_id=None):
     """Fetch new videos from a YouTube channel RSS feed and import transcripts."""
     if not profile.channel_id:
         return 0, "No channel ID found. Try removing and re-adding the profile."
@@ -206,7 +255,11 @@ def sync_youtube_channel(profile):
     print(f"[Sync] Fetching RSS: {rss_url}")
 
     try:
-        feed = feedparser.parse(rss_url)
+        # feedparser's URL mode uses urllib without a timeout, which can hang
+        # a background sync thread forever. Fetch with an explicit timeout.
+        response = requests.get(rss_url, timeout=10)
+        response.raise_for_status()
+        feed = feedparser.parse(response.content)
     except Exception as e:
         return 0, f"Failed to fetch RSS feed: {e}"
 
@@ -247,7 +300,7 @@ def sync_youtube_channel(profile):
 
                 # Generate embedding
                 try:
-                    embedding = get_embedding(content.body)
+                    embedding = get_embedding(content.body, user_id=user_id)
                     if embedding:
                         db.session.add(
                             Embedding(
@@ -274,3 +327,15 @@ def sync_youtube_channel(profile):
     return imported, ""
 
 
+# ─────────────────────────────────────────────────────────────
+# API USAGE ENDPOINT (for frontend quota display)
+# ─────────────────────────────────────────────────────────────
+
+@settings_bp.route("/api/usage")
+def api_usage():
+    """Returns JSON with per-API-type usage stats for the current user."""
+    if not g.user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    stats = get_usage_stats(g.user_id)
+    return jsonify(stats)

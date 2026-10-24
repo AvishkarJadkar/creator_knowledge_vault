@@ -25,5 +25,13 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Uploads (files are parsed in memory; the directory is never written to)
+uploads/
+
+# Test artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Gemini
 .gemini/

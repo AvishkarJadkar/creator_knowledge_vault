@@ -23,81 +23,55 @@ class RedditProvider(BaseProvider):
     def search(self, keyword: str, limit: int = 5) -> list[dict]:
         """
         Search Reddit for keyword, fetching post details and top comments.
+        Uses OAuth when REDDIT_CLIENT_ID/SECRET are configured; otherwise the
+        public JSON API is attempted (often blocked with a 403 on servers).
         """
-        # Reddit Search API: https://www.reddit.com/search.json?q=KEYWORD&sort=relevance&limit=N
-        url = "https://www.reddit.com/search.json"
-        params = {"q": keyword, "sort": "relevance", "limit": limit}
-        
         try:
-            response = self.scraper.session.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            posts = data.get("data", {}).get("children", [])
-            
-            results = []
-            for post in posts:
-                p_data = post["data"]
-                permalink = p_data["permalink"]
-                
-                # Consolidate: Fetch deeper details (body + comments) in ONE request
-                # We use scrape_post_details but manually extract comments too
-                details_url = f"https://www.reddit.com{permalink}.json"
-                try:
-                    resp = self.scraper.session.get(details_url, timeout=10)
-                    resp.raise_for_status()
-                    post_blob = resp.json()
-                    
-                    full_body = ""
-                    comments = []
-                    
-                    if len(post_blob) > 0:
-                        main_post = post_blob[0]["data"]["children"][0]["data"]
-                        full_body = main_post.get("selftext", "")
-                    
-                    if len(post_blob) > 1:
-                        comments_raw = post_blob[1]["data"]["children"][:5]
-                        comments = self.scraper._extract_comments(comments_raw)
-                except Exception as e:
-                    logging.warning(f"Failed deeper fetch for {permalink}: {e}")
-                    full_body = p_data.get("selftext", "")
-                    comments = []
-
-                result = {
-                    "title": p_data["title"],
-                    "url": f"https://www.reddit.com{permalink}",
-                    "source": f"r/{p_data['subreddit']}",
-                    "score": p_data.get("ups", 0),
-                    "created_utc": p_data.get("created_utc"),
-                    "thumbnail": self._get_best_thumbnail(p_data),
-                    # Truncate preview for UI display
-                    "summary": (full_body[:400] + "...") if len(full_body) > 400 else full_body,
-                    "comments": comments
-                }
-                
-                # Truncate content for AI synthesis (prevent context blow-out)
-                safe_body = full_body[:1000]
-                formatted_comments = self._format_comments(comments)[:1000]
-                result["raw_text"] = f"Title: {result['title']}\nBody: {safe_body}\nComments:\n{formatted_comments}"
-                
-                results.append(result)
-            return results
+            posts = self.scraper.search_posts(keyword, limit=limit)
         except Exception as e:
             logging.error(f"RedditProvider search error: {e}")
             return []
 
+        results = []
+        for p_data in posts:
+            permalink = p_data.get("permalink")
+            if not permalink:
+                continue
+
+            full_body = p_data.get("selftext", "") or ""
+            comments = []
+            try:
+                comments = self.scraper.fetch_post_comments(permalink)
+            except Exception as e:
+                logging.warning(f"Failed deeper fetch for {permalink}: {e}")
+
+            result = {
+                "title": p_data.get("title", "Reddit post"),
+                "url": f"https://www.reddit.com{permalink}",
+                "source": f"r/{p_data.get('subreddit', 'reddit')}",
+                "score": p_data.get("ups", 0),
+                "created_utc": p_data.get("created_utc"),
+                "thumbnail": self._get_best_thumbnail(p_data),
+                # Truncate preview for UI display
+                "summary": (full_body[:400] + "...") if len(full_body) > 400 else full_body,
+                "comments": comments,
+            }
+
+            # Truncate content for AI synthesis (prevent context blow-out)
+            safe_body = full_body[:1000]
+            formatted_comments = self._format_comments(comments)[:1000]
+            result["raw_text"] = f"Title: {result['title']}\nBody: {safe_body}\nComments:\n{formatted_comments}"
+
+            results.append(result)
+        return results
+
     def _fetch_comments_only(self, permalink: str) -> list[dict]:
         """Fetch top 3-5 top-level comments."""
-        url = f"https://www.reddit.com{permalink}.json"
         try:
-            response = self.scraper.session.get(url, timeout=10)
-            response.raise_for_status()
-            post_data = response.json()
-            if len(post_data) > 1:
-                comments_raw = post_data[1]["data"]["children"][:5]
-                return self.scraper._extract_comments(comments_raw)
-        except:
-            pass
-        return []
+            return self.scraper.fetch_post_comments(permalink)
+        except Exception as e:
+            logging.warning(f"Failed fetching comments for {permalink}: {e}")
+            return []
 
     def _get_best_thumbnail(self, p_data: dict) -> str | None:
         """Try to get the best available image: preview > thumbnail."""

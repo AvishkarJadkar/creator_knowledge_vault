@@ -1,10 +1,12 @@
 import logging
+import os
 import random
+import threading
 import time
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 import re
 
 # Mocking the agents.py functionality for self-containment
@@ -19,31 +21,130 @@ USER_AGENTS = [
 def get_agent():
     return random.choice(USER_AGENTS)
 
+
+# ─────────────────────────────────────────────────────────────
+# OAUTH (application-only)
+# Reddit blocks unauthenticated JSON requests from most server IPs
+# (HTTP 403), so production deployments should set REDDIT_CLIENT_ID
+# and REDDIT_CLIENT_SECRET from https://www.reddit.com/prefs/apps
+# ─────────────────────────────────────────────────────────────
+REDDIT_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
+_oauth_lock = threading.Lock()
+_oauth_cache = {"token": None, "expires_at": 0.0}
+
+
+def get_oauth_token() -> Optional[str]:
+    """Return a cached Reddit OAuth token, or None when not configured."""
+    client_id = os.environ.get("REDDIT_CLIENT_ID")
+    client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return None
+
+    with _oauth_lock:
+        now = time.time()
+        if _oauth_cache["token"] and now < _oauth_cache["expires_at"] - 60:
+            return _oauth_cache["token"]
+
+        try:
+            resp = requests.post(
+                REDDIT_TOKEN_URL,
+                auth=(client_id, client_secret),
+                data={"grant_type": "client_credentials"},
+                headers={"User-Agent": get_agent()},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            token = data.get("access_token")
+            if not token:
+                logging.error("Reddit OAuth: no access_token in response")
+                return None
+            _oauth_cache["token"] = token
+            _oauth_cache["expires_at"] = now + int(data.get("expires_in", 3600))
+            return token
+        except Exception as e:
+            logging.error(f"Reddit OAuth error: {e}")
+            return None
+
+
 class RandomUserAgentSession(requests.Session):
     def request(self, *args, **kwargs):
         self.headers.update({"User-Agent": get_agent()})
         return super().request(*args, **kwargs)
+
 
 class RedditScraper:
     def __init__(self, timeout: int = 10):
         self.session = RandomUserAgentSession()
         self.timeout = timeout
 
+        # Keep retries short: a blocked request should fail fast instead of
+        # hanging an Explore request for a minute.
         retries = Retry(
-            total=5,
-            backoff_factor=2,
+            total=2,
+            backoff_factor=1,
             status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"],
         )
         self.session.mount("https://", HTTPAdapter(max_retries=retries))
+
+    def get(self, path: str, params: Optional[Dict[str, Any]] = None):
+        """GET a Reddit API path, using OAuth when credentials are configured.
+
+        Falls back to the public JSON endpoints (which may be blocked with a
+        403 on datacenter IPs — callers must handle that).
+        """
+        token = get_oauth_token()
+        if token:
+            return self.session.get(
+                f"https://oauth.reddit.com{path}",
+                params=params,
+                headers={"Authorization": f"bearer {token}"},
+                timeout=self.timeout,
+            )
+
+        # Public reddit.com endpoints need an explicit `.json` suffix —
+        # otherwise they return an HTML page and response.json() fails.
+        if not path.endswith(".json"):
+            path = f"{path}.json"
+
+        return self.session.get(
+            f"https://www.reddit.com{path}",
+            params=params,
+            timeout=self.timeout,
+        )
+
+    def search_posts(self, keyword: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Search Reddit and return the raw post data dicts."""
+        params = {
+            "q": keyword,
+            "sort": "relevance",
+            "limit": limit,
+            "type": "link",
+            "raw_json": 1,
+        }
+        response = self.get("/search", params=params)
+        response.raise_for_status()
+        payload = response.json()
+        children = payload.get("data", {}).get("children", [])
+        return [child.get("data", {}) for child in children if child.get("kind") == "t3"]
+
+    def fetch_post_comments(self, permalink: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Fetch the top-level comments for a post."""
+        response = self.get(f"{permalink}.json", params={"raw_json": 1, "limit": limit})
+        response.raise_for_status()
+        post_data = response.json()
+        if not isinstance(post_data, list) or len(post_data) < 2:
+            return []
+        return self._extract_comments(post_data[1]["data"]["children"][:limit])
 
     def fetch_subreddit_posts(
         self, subreddit: str, limit: int = 10, category: str = "hot"
     ) -> List[Dict[str, Any]]:
-        url = f"https://www.reddit.com/r/{subreddit}/{category}.json"
         params = {"limit": min(100, limit), "raw_json": 1}
         
         try:
-            response = self.session.get(url, params=params, timeout=self.timeout)
+            response = self.get(f"/r/{subreddit}/{category}.json", params=params)
             response.raise_for_status()
             data = response.json()
             posts = data.get("data", {}).get("children", [])
@@ -65,9 +166,8 @@ class RedditScraper:
             return []
 
     def scrape_post_details(self, permalink: str) -> Optional[Dict[str, Any]]:
-        url = f"https://www.reddit.com{permalink}.json"
         try:
-            response = self.session.get(url, timeout=self.timeout)
+            response = self.get(f"{permalink}.json", params={"raw_json": 1})
             response.raise_for_status()
             post_data = response.json()
             

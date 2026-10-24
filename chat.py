@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from models import Content, Embedding, ChatSession, ChatMessage, Memory
 from extensions import db
 from dotenv import load_dotenv
@@ -7,31 +7,66 @@ import json
 import re
 from datetime import datetime, timedelta
 from groq import Groq
-from ai import get_embedding, cosine_similarity
+from ai import get_embedding, cosine_similarity, GROQ_CHAT_MODEL, GROQ_FAST_MODEL
+from rate_limit import check_and_increment, refund_usage, roughly_count_tokens
 
 load_dotenv()
 
 chat_bp = Blueprint("chat", __name__)
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+_groq_client = None
 
-def generate_chat_title(user_msg, bot_msg):
-    """Uses LLM to generate a short, contextual chat title."""
+def get_groq_client():
+    """Lazy-initializes the Groq client."""
+    global _groq_client
+    if _groq_client is None:
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            return None
+        _groq_client = Groq(api_key=api_key)
+    return _groq_client
+
+def generate_chat_title(user_msg, bot_msg, user_id=None):
+    """Uses LLM to generate a short, contextual chat title.
+    Counts against the user's groq_chat quota."""
+    client = get_groq_client()
+    if not client:
+        return user_msg[:50]
+
+    # Count this LLM call against the user's daily quota
+    if user_id:
+        allowed, msg, _ = check_and_increment(user_id, "groq_chat")
+        if not allowed:
+            return user_msg[:50]  # Graceful fallback — use raw text
+
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_FAST_MODEL,
             messages=[{"role": "user", "content": f"Generate a short chat title (3-5 words max, no quotes, no punctuation) that summarizes this conversation:\n\nUser: {user_msg}\nAssistant: {bot_msg[:200]}\n\nTitle:"}],
             temperature=0.7,
-            max_tokens=15
+            max_tokens=64
         )
         title = response.choices[0].message.content.strip().strip('"\'')
         # Remove any trailing punctuation
         title = title.rstrip('.!?')
         return title[:50] if len(title) > 3 else "New Chat"
     except:
+        if user_id:
+            refund_usage(user_id, "groq_chat")
         return user_msg[:50]
 
-def extract_fact(text, history):
-    """Uses LLM to extract a clean fact from 'remember' style messages."""
+def extract_fact(text, history, user_id=None):
+    """Uses LLM to extract a clean fact from 'remember' style messages.
+    Counts against the user's groq_chat quota."""
+    client = get_groq_client()
+    if not client:
+        return None
+
+    # Count this LLM call against the user's daily quota
+    if user_id:
+        allowed, msg, _ = check_and_increment(user_id, "groq_chat")
+        if not allowed:
+            return None  # Graceful fallback — skip memory extraction
+
     prompt = f"""Extract ONLY the explicitly stated fact from the user's message.
 Format as a single, concise sentence starting with "The user...".
 If the message is vague (e.g., "remember name" without giving a name), return "NONE".
@@ -44,9 +79,10 @@ USER MESSAGE:
 {text}
 
 EXTRACTED FACT:"""
+
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_FAST_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=100
@@ -56,23 +92,25 @@ EXTRACTED FACT:"""
         fact = re.sub(r'^(Here is the fact:|Fact:|Extracted Fact:)\s*', '', fact, flags=re.IGNORECASE).strip()
         return None if "NONE" in fact.upper() or len(fact) < 5 else fact
     except:
+        if user_id:
+            refund_usage(user_id, "groq_chat")
         return None
 
 @chat_bp.route("/chat")
 @chat_bp.route("/chat/<int:session_id>")
 def chat(session_id=None):
-    if "user_id" not in session:
+    if not g.user_id:
         return redirect(url_for("auth.login"))
 
-    user_sessions = ChatSession.query.filter_by(user_id=session["user_id"]).order_by(ChatSession.updated_at.desc()).all()
-    user_memories = Memory.query.filter_by(user_id=session["user_id"]).order_by(Memory.created_at.desc()).all()
+    user_sessions = ChatSession.query.filter_by(user_id=g.user_id).order_by(ChatSession.updated_at.desc()).all()
+    user_memories = Memory.query.filter_by(user_id=g.user_id).order_by(Memory.created_at.desc()).all()
     
     active_session = None
     messages = []
     
     if session_id:
         active_session = ChatSession.query.get_or_404(session_id)
-        if active_session.user_id != session["user_id"]:
+        if active_session.user_id != g.user_id:
             return redirect(url_for("chat.chat"))
         messages = ChatMessage.query.filter_by(session_id=session_id).order_by(ChatMessage.created_at.asc()).all()
     
@@ -104,12 +142,12 @@ def chat(session_id=None):
 
 @chat_bp.route("/chat/new", methods=["POST"])
 def new_chat():
-    if "user_id" not in session:
+    if not g.user_id:
         if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({"error": "Not logged in"}), 401
         return redirect(url_for("auth.login"))
     
-    new_sess = ChatSession(user_id=session["user_id"], title="New Chat")
+    new_sess = ChatSession(user_id=g.user_id, title="New Chat")
     db.session.add(new_sess)
     db.session.commit()
     
@@ -120,11 +158,11 @@ def new_chat():
 
 @chat_bp.route("/chat/<int:session_id>/send", methods=["POST"])
 def send_message(session_id):
-    if "user_id" not in session:
+    if not g.user_id:
         return jsonify({"error": "Not logged in"}), 401
         
     chat_sess = ChatSession.query.get_or_404(session_id)
-    if chat_sess.user_id != session["user_id"]:
+    if chat_sess.user_id != g.user_id:
         return jsonify({"error": "Unauthorized"}), 403
     
     # Accept both form data and JSON
@@ -136,9 +174,26 @@ def send_message(session_id):
     if not question:
         return jsonify({"error": "Empty message"}), 400
 
-    # --- SECURITY: Limit message length to prevent abuse ---
+    # --- SECURITY: Limit message length and tokens ---
     if len(question) > 10000:
         return jsonify({"error": "Message too long. Maximum 10,000 characters."}), 400
+    
+    tokens = roughly_count_tokens(question)
+    if tokens > 3000:
+        return jsonify({"error": f"Message too long (approx {tokens} tokens). Maximum 3,000 tokens."}), 400
+
+    # --- CONFIG CHECK: fail before consuming quota or saving the message ---
+    client = get_groq_client()
+    if not client:
+        return jsonify({"error": "Groq API Key missing. Please check your server configuration."}), 500
+
+    # --- RATE LIMITING: Per-user daily and burst ---
+    allowed, msg, retry_after = check_and_increment(g.user_id, "groq_chat")
+    if not allowed:
+        response = jsonify({"error": msg})
+        if retry_after:
+            response.headers["Retry-After"] = str(retry_after)
+        return response, 429
 
     # 1. Save User Message
     user_msg = ChatMessage(session_id=session_id, role="user", content=question)
@@ -157,9 +212,9 @@ def send_message(session_id):
         history = ChatMessage.query.filter_by(session_id=session_id).order_by(ChatMessage.created_at.desc()).limit(5).all()
         history_text = "\n".join([f"{m.role}: {m.content}" for m in reversed(history)])
         
-        extracted = extract_fact(question, history_text)
+        extracted = extract_fact(question, history_text, user_id=g.user_id)
         if extracted:
-            new_mem = Memory(user_id=session["user_id"], fact=extracted)
+            new_mem = Memory(user_id=g.user_id, fact=extracted)
             db.session.add(new_mem)
             db.session.commit()
             memory_saved_fact = extracted
@@ -167,41 +222,40 @@ def send_message(session_id):
     # 3. RAG Retrieval
     context_parts = []
     try:
-        query_embedding = get_embedding(question)
+        query_embedding = get_embedding(question, user_id=g.user_id)
         if query_embedding:
-            # Get user content
-            all_contents = Content.query.filter_by(user_id=session["user_id"], is_deleted=False).all()
-            content_ids = [c.id for c in all_contents]
-            content_map = {c.id: c for c in all_contents}
-            
-            # Fetch embeddings
-            embeddings = Embedding.query.filter(Embedding.content_id.in_(content_ids)).all()
+            # Optimized retrieval with JOIN
+            data = db.session.query(Content, Embedding).join(
+                Embedding, Content.id == Embedding.content_id
+            ).filter(
+                Content.user_id == g.user_id,
+                Content.is_deleted == False
+            ).all()
             
             scored_results = []
-            for emb in embeddings:
-                vector = json.loads(emb.vector)
-                score = cosine_similarity(query_embedding, vector)
-                if score > 0.3:
-                    scored_results.append((score, content_map[emb.content_id]))
+            for c, emb in data:
+                try:
+                    score = cosine_similarity(query_embedding, json.loads(emb.vector))
+                    if score > 0.4: # Higher threshold for chat accuracy
+                        scored_results.append((score, c))
+                except: continue
             
             scored_results.sort(key=lambda x: x[0], reverse=True)
-            top_results = scored_results[:5] # Top 5 relevant snippets
-            
-            for _, c in top_results:
-                context_parts.append(f"Title: {c.title}\n{c.body[:1000]}") # Longer snippets for better context
+            for _, c in scored_results[:5]: # Top 5 relevant snippets
+                context_parts.append(f"Title: {c.title}\n{c.body[:1000]}")
             
     except Exception as e:
         print(f"Retrieval error: {e}")
 
     # Fallback context if RAG fails or returns nothing
     if not context_parts:
-        contents = Content.query.filter_by(user_id=session["user_id"], is_deleted=False).order_by(Content.created_at.desc()).limit(5).all()
+        contents = Content.query.filter_by(user_id=g.user_id, is_deleted=False).order_by(Content.created_at.desc()).limit(5).all()
         context_parts = [f"Title: {c.title}\n{c.body[:500]}" for c in contents]
 
     context = "\n\n".join(context_parts)
 
     # 4. Load Memories
-    user_memories = Memory.query.filter_by(user_id=session["user_id"]).all()
+    user_memories = Memory.query.filter_by(user_id=g.user_id).all()
     memories_str = "\n".join([f"- {m.fact}" for m in user_memories]) if user_memories else "No specific personal facts saved yet."
 
     # 5. Build Multi-Turn History
@@ -247,7 +301,7 @@ def send_message(session_id):
     # 6. Call LLM
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_CHAT_MODEL,
             messages=llm_messages,
             temperature=0,
             max_tokens=1024,
@@ -261,7 +315,7 @@ def send_message(session_id):
         # Generate smart title after first exchange
         new_title = None
         if is_first_message:
-            chat_sess.title = generate_chat_title(question, answer)
+            chat_sess.title = generate_chat_title(question, answer, user_id=g.user_id)
             new_title = chat_sess.title
         db.session.commit()
         
@@ -275,6 +329,8 @@ def send_message(session_id):
             "memory_saved": memory_saved_fact
         })
     except Exception as e:
+        # The provider call failed — don't charge the user for it.
+        refund_usage(g.user_id, "groq_chat")
         # --- SECURITY: Don't expose internal errors to users ---
         print(f"Chat error: {e}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
@@ -282,13 +338,13 @@ def send_message(session_id):
 
 @chat_bp.route("/chat/<int:session_id>/delete", methods=["POST"])
 def delete_session(session_id):
-    if "user_id" not in session:
+    if not g.user_id:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({"error": "Not logged in"}), 401
         return redirect(url_for("auth.login"))
         
     chat_sess = ChatSession.query.get_or_404(session_id)
-    if chat_sess.user_id != session["user_id"]:
+    if chat_sess.user_id != g.user_id:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({"error": "Unauthorized"}), 403
         return redirect(url_for("chat.chat"))
@@ -304,13 +360,13 @@ def delete_session(session_id):
 
 @chat_bp.route("/chat/memory/<int:memory_id>/delete", methods=["POST"])
 def delete_memory(memory_id):
-    if "user_id" not in session:
+    if not g.user_id:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({"error": "Not logged in"}), 401
         return redirect(url_for("auth.login"))
     
     mem = Memory.query.get_or_404(memory_id)
-    if mem.user_id != session["user_id"]:
+    if mem.user_id != g.user_id:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({"error": "Unauthorized"}), 403
         return redirect(url_for("chat.chat"))

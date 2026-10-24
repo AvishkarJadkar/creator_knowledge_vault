@@ -5,7 +5,7 @@
     <div class="flex justify-between items-center">
         <div>
             <h2 id="greeting"></h2>
-            <p>{{ contents|length }} item{{ 's' if contents|length != 1 else '' }} in your vault</p>
+            <p><span id="vault-count">{{ contents|length }}</span> <span id="vault-count-label">item{{ 's' if contents|length != 1 else '' }}</span> in your vault</p>
         </div>
         <div class="flex items-center" style="gap: 1rem;">
             {% if contents %}
@@ -18,6 +18,19 @@
             </a>
         </div>
     </div>
+</div>
+<div class="card mb-4" id="quota-card" style="padding: 1rem; margin-bottom: 2rem; animation: fadeInUp 0.4s ease 0.1s both;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h4 style="margin: 0; display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem;">
+            <i data-lucide="gauge" width="16" height="16" style="color: var(--primary);"></i>
+            Free Plan Credits
+        </h4>
+        <a href="/settings" class="text-muted" style="font-size: 0.75rem; text-decoration: none;">View details →</a>
+    </div>
+    <div id="quota-loading" style="text-align: center; padding: 0.5rem; color: var(--text-muted);">
+        <i data-lucide="loader-2" class="spin" width="16" height="16"></i>
+    </div>
+    <div id="quota-grid" style="display: none; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;"></div>
 </div>
 
 <div class="grid-3" id="content-grid">
@@ -36,7 +49,8 @@
         </div>
         
         <div style="margin-bottom: 1rem;">
-             <span class="badge badge-{{ c.content_type }}">{{ c.content_type }}</span>
+             {% set badge_type = c.content_type if c.content_type in ['note', 'idea', 'pdf', 'youtube', 'reddit'] else 'note' %}
+             <span class="badge badge-{{ badge_type }}">{{ c.content_type or 'note' }}</span>
         </div>
 
         <div style="flex-grow: 1;">
@@ -110,9 +124,94 @@
         if(greetingEl) greetingEl.textContent = greeting;
     })();
 
+    // Fetch and render Quota Stats
+    (async function loadQuotaStats() {
+        const grid = document.getElementById('quota-grid');
+        const loading = document.getElementById('quota-loading');
+        if (!grid || !loading) return;
+
+        try {
+            const resp = await vaulty.fetch('/api/usage');
+            if (!resp.ok) throw new Error('Failed to fetch');
+            const stats = await resp.json();
+
+            let html = '';
+            for (const [key, s] of Object.entries(stats)) {
+                let barColor = s.percent <= 50 ? '#22c55e' : s.percent <= 80 ? '#facc15' : '#ef4444';
+                
+                html += `
+                <div class="quota-item">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.25rem;">
+                        <span class="text-muted">${s.label}</span>
+                        <span><strong>${s.limit - s.used}</strong> remaining</span>
+                    </div>
+                    <div style="background: var(--border); border-radius: 999px; height: 5px; overflow: hidden;">
+                        <div style="width: ${s.percent}%; height: 100%; background: ${barColor}; transition: width 0.6s ease;"></div>
+                    </div>
+                </div>`;
+            }
+
+            grid.innerHTML = html;
+            grid.style.display = 'grid';
+            loading.style.display = 'none';
+            if (window.lucide) lucide.createIcons();
+        } catch (e) {
+            loading.innerHTML = '<span style="font-size: 0.8rem;">⚠️ Could not load quota</span>';
+        }
+    })();
+
     // Undo / Redo Logic
     let undoStack = [];
     let redoStack = [];
+
+    function visibleCards() {
+        return Array.from(document.querySelectorAll('.card[id^="card-"]'))
+            .filter(card => card.style.display !== 'none');
+    }
+
+    function updateVaultCount() {
+        const countEl = document.getElementById('vault-count');
+        const labelEl = document.getElementById('vault-count-label');
+        if (!countEl || !labelEl) return;
+        const n = visibleCards().length;
+        countEl.textContent = n;
+        labelEl.textContent = n === 1 ? 'item' : 'items';
+    }
+
+    // Keep the grid from looking blank after the last card is deleted.
+    function ensureEmptyState() {
+        const grid = document.getElementById('content-grid');
+        if (!grid) return;
+        let empty = document.getElementById('empty-state');
+
+        if (visibleCards().length > 0) {
+            if (empty) empty.style.display = 'none';
+            return;
+        }
+
+        if (empty) {
+            empty.style.display = 'block';
+            return;
+        }
+
+        empty = document.createElement('div');
+        empty.className = 'card empty-state';
+        empty.id = 'empty-state';
+        empty.style.cssText = 'padding: 3rem; text-align: center;';
+        empty.innerHTML = `
+            <div class="empty-icon" style="margin-bottom: 1.5rem;">
+                <i data-lucide="sparkles" width="48" height="48" style="color: var(--primary); opacity: 0.8;"></i>
+            </div>
+            <h3 style="font-size: 1.8rem; margin-bottom: 1rem;">Your vault is ready!</h3>
+            <p class="text-muted" style="max-width: 500px; margin: 0 auto 2rem; line-height: 1.6;">
+                Start building your knowledge base. You can add content manually or connect your YouTube to auto-import your latest work.
+            </p>
+            <a href="/add" class="btn" style="padding: 0 2rem; height: 50px; display: inline-flex; align-items: center; gap: 0.5rem; border-radius: 25px;">
+                <i data-lucide="plus" width="18" height="18"></i> Add Manually
+            </a>`;
+        grid.appendChild(empty);
+        if (window.lucide) lucide.createIcons();
+    }
 
     function showToast(message, type = 'info') {
         const container = document.getElementById('toast-container');
@@ -163,6 +262,8 @@
                     card.style.display = 'none';
                     undoStack.push(id);
                     redoStack = []; // Clear redo stack on new action
+                    updateVaultCount();
+                    ensureEmptyState();
                     showToast('Item deleted. Press Ctrl+Z to undo.');
                 }
             }
@@ -183,6 +284,8 @@
                 if (card) {
                     card.style.display = 'flex';
                     redoStack.push(id);
+                    updateVaultCount();
+                    ensureEmptyState();
                     showToast('Undo successful. Item restored.');
                 }
             } else {
@@ -205,6 +308,8 @@
                 if (card) {
                     card.style.display = 'none';
                     undoStack.push(id);
+                    updateVaultCount();
+                    ensureEmptyState();
                     showToast('Redo successful. Item deleted.');
                 }
             } else {
@@ -223,20 +328,18 @@
             const res = await vaulty.fetch('/content/delete_all', { method: 'POST' });
             if (res.ok) {
                 // Get all visible cards to store their IDs for undo
-                const visibleCards = Array.from(document.querySelectorAll('.card[id^="card-"]'))
+                const visible = Array.from(document.querySelectorAll('.card[id^="card-"]'))
                     .filter(card => card.style.display !== 'none');
                 
-                const deletedIds = visibleCards.map(card => parseInt(card.id.replace('card-', '')));
+                const deletedIds = visible.map(card => parseInt(card.id.replace('card-', '')));
                 
                 if (deletedIds.length > 0) {
-                    visibleCards.forEach(card => card.style.display = 'none');
+                    visible.forEach(card => card.style.display = 'none');
                     undoStack.push({ type: 'all', ids: deletedIds });
                     redoStack = []; // Clear redo stack
+                    updateVaultCount();
+                    ensureEmptyState();
                     showToast(`${deletedIds.length} items deleted. Press Ctrl+Z to undo.`);
-                    
-                    // Show empty state
-                    const emptyState = document.getElementById('empty-state');
-                    if (emptyState) emptyState.style.display = 'block';
                 }
             }
         } catch (error) {
@@ -258,11 +361,9 @@
                     if (card) card.style.display = 'flex';
                 });
                 redoStack.push(action);
+                updateVaultCount();
+                ensureEmptyState();
                 showToast(`Undo successful. ${action.ids.length} items restored.`);
-                
-                // Hide empty state
-                const emptyState = document.getElementById('empty-state');
-                if (emptyState) emptyState.style.display = 'none';
             } else {
                 undoStack.push(action);
             }
@@ -274,18 +375,20 @@
 
     async function redoDeleteAll(action) {
         try {
-            const res = await vaulty.fetch('/content/delete_all', { method: 'POST' });
-            if (res.ok) {
+            // Delete only the items this action restored — calling delete_all
+            // would also wipe content created since the original delete.
+            const responses = await Promise.all(
+                action.ids.map(id => vaulty.fetch(`/content/${id}/delete`, { method: 'POST' }))
+            );
+            if (responses.every(res => res.ok)) {
                 action.ids.forEach(id => {
                     const card = document.getElementById(`card-${id}`);
                     if (card) card.style.display = 'none';
                 });
                 undoStack.push(action);
+                updateVaultCount();
+                ensureEmptyState();
                 showToast(`Redo successful. ${action.ids.length} items deleted.`);
-                
-                // Show empty state
-                const emptyState = document.getElementById('empty-state');
-                if (emptyState) emptyState.style.display = 'block';
             } else {
                 redoStack.push(action);
             }

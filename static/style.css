@@ -68,6 +68,20 @@
     --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
     --shadow-glow: 0 0 30px var(--primary-glow);
     --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+    /* Short aliases used by templates and a few components.
+       Without these, `color: var(--text)` etc. were invalid and ignored. */
+    --bg: var(--bg-body);
+    --card: var(--bg-card);
+    --border: var(--border-color);
+    --text: var(--text-main);
+    --text-dim: var(--text-muted);
+    --error: var(--danger);
+    --accent: var(--primary);
+    --grad: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+    --primary-low: rgba(139, 92, 246, 0.18);
+    --radius-pill: var(--radius-full);
+    --surface-glass: rgba(255, 255, 255, 0.06);
 }
 
 /* ---------- Keyframes (snappy, short) ---------- */

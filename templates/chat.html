@@ -85,6 +85,9 @@
 
     <!-- Floating Input Pill -->
     <div class="chat-input-area">
+      <div id="chat-quota-info" style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem; text-align: center; display: none;">
+        <span id="chat-remaining-count"></span> credits remaining
+      </div>
       <div class="chat-form" style="width: 100%; max-width: 850px;">
         <div class="input-container">
           <textarea name="question" placeholder="Ask anything, or say 'Remember that...'" required rows="1"
@@ -173,10 +176,35 @@
   // --- SECURITY: Get CSRF token for AJAX requests ---
   const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
+  // Current conversation. These are `let` so starting a new chat can retarget
+  // future sends without a reload. (They used to be `const` inside the
+  // active-session block while the new-chat handler assigned `window.SEND_URL`,
+  // which never changed the value sendMessage() actually closed over.)
+  let SESSION_ID = {{ active_session.id if active_session else 'null' }};
+  let SEND_URL = SESSION_ID ? "/chat/" + SESSION_ID + "/send" : null;
+
   // --- SECURITY: Safe markdown rendering with DOMPurify ---
   function renderMarkdownSafe(text) {
     const rawHtml = marked.parse(text || '');
     return DOMPurify.sanitize(rawHtml);
+  }
+
+  // Toast helper lives outside the active-session block: deleting a chat from
+  // the sidebar calls it even when no conversation is open.
+  function showToast(message) {
+    let container = document.querySelector('.flash-messages');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'flash-messages';
+      document.querySelector('.chat-main').prepend(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'flash-toast';
+    toast.innerHTML = `<span>${DOMPurify.sanitize(message)}</span>`;
+    container.appendChild(toast);
+    // Re-init lucide icons
+    if (window.lucide) lucide.createIcons();
+    setTimeout(() => toast.remove(), 5000);
   }
 
   // Render markdown in bot messages
@@ -200,33 +228,6 @@
       el.textContent = date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
     } catch(e) {}
   });
-
-  // New Chat button — async, no page refresh feel
-  async function handleNewChat() {
-    const btn = document.getElementById('new-chat-btn');
-    const emptyBtn = document.getElementById('empty-new-chat-btn');
-    if (btn) btn.style.opacity = '0.5';
-    if (emptyBtn) emptyBtn.disabled = true;
-
-    try {
-      const res = await fetch('/chat/new', {
-        method: 'POST',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-      });
-      const data = await res.json();
-      if (data.url) {
-        // Smoothly update URL and state without reload
-        window.history.pushState({}, '', data.url);
-        window.location.reload(); // Still need reload to reset backend-rendered Jinja state easily for now, 
-        // but let's try a pure JS approach for a TRUE zero-reload if possible.
-        // Actually, for a TRUE zero-reload, we'd need to clear DOM and update SESSION_ID.
-        // Let's implement that.
-      }
-    } catch (e) {
-      if (btn) btn.style.opacity = '1';
-      if (emptyBtn) emptyBtn.disabled = false;
-    }
-  }
 
   // Improved Zero-Reload New Chat
   async function startNewChat() {
@@ -263,11 +264,9 @@
             </div>`;
           chatHeader.textContent = "New Chat";
 
-            // Update global SESSION_ID if it exists
-          if (typeof SESSION_ID !== 'undefined') {
-            window.SESSION_ID = data.session_id;
-            window.SEND_URL = "/chat/" + data.session_id + "/send";
-          }
+            // Retarget future sends to the new session
+          SESSION_ID = data.session_id;
+          SEND_URL = "/chat/" + data.session_id + "/send";
 
           // Update sidebar active state
           document.querySelectorAll('.session-item').forEach(i => i.classList.remove('active'));
@@ -380,9 +379,6 @@
   });
 
   {% if active_session %}
-  const SESSION_ID = {{ active_session.id }};
-  const SEND_URL = "/chat/" + SESSION_ID + "/send";
-
   function getTimeNow() {
     const now = new Date();
     return now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
@@ -450,21 +446,24 @@
     if (el) el.remove();
   }
 
-  function showToast(message) {
-    let container = document.querySelector('.flash-messages');
-    if (!container) {
-      container = document.createElement('div');
-      container.className = 'flash-messages';
-      document.querySelector('.chat-main').prepend(container);
-    }
-    const toast = document.createElement('div');
-    toast.className = 'flash-toast';
-    toast.innerHTML = `<span>${DOMPurify.sanitize(message)}</span>`;
-    container.appendChild(toast);
-    // Re-init lucide icons
-    if (window.lucide) lucide.createIcons();
-    setTimeout(() => toast.remove(), 5000);
+  async function updateChatQuota() {
+    try {
+      const resp = await fetch('/api/usage');
+      if (resp.ok) {
+        const stats = await resp.json();
+        const chatStats = stats['groq_chat'];
+        if (chatStats) {
+          const info = document.getElementById('chat-quota-info');
+          const count = document.getElementById('chat-remaining-count');
+          if (info && count) {
+            count.textContent = chatStats.limit - chatStats.used;
+            info.style.display = 'block';
+          }
+        }
+      }
+    } catch (e) {}
   }
+  updateChatQuota();
 
   function typeTitle(el, text) {
     el.textContent = '';
@@ -510,6 +509,14 @@
 
       removeThinkingIndicator();
 
+      if (res.status === 429) {
+        const err = await res.json();
+        const retryAfter = res.headers.get('Retry-After');
+        let msg = '⏳ ' + (err.error || 'Credit limit reached. Please upgrade to continue.');
+        addMessage('assistant', msg, getTimeNow());
+        return;
+      }
+
       if (!res.ok) {
         const err = await res.json();
         addMessage('assistant', '⚠️ Error: ' + (err.error || 'Something went wrong'), getTimeNow());
@@ -517,6 +524,9 @@
       }
 
       const data = await res.json();
+      
+      // Update quota after message
+      updateChatQuota();
 
       // Show bot response
       addMessage('assistant', data.answer, getTimeNow());
@@ -673,7 +683,8 @@
 
   // Handle new chat action in modal
   modalNewChatBtn.addEventListener('click', () => {
-    window.location.href = "{{ url_for('chat.new_chat') }}";
+    closeSearchModal();
+    startNewChat();
   });
 </script>
 {% endblock %}

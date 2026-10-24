@@ -3,13 +3,24 @@ services:
     name: vaulty
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 --preload
+    healthCheckPath: /health
     envVars:
+      - key: FLASK_ENV
+        value: production
       - key: SECRET_KEY
         generateValue: true
       - key: GROQ_API_KEY
         sync: false
       - key: GEMINI_API_KEY
+        sync: false
+      - key: FIREBASE_API_KEY
+        sync: false
+      # Optional: enables Reddit's authenticated API for Explore.
+      # Without these, Explore falls back to Hacker News.
+      - key: REDDIT_CLIENT_ID
+        sync: false
+      - key: REDDIT_CLIENT_SECRET
         sync: false
       - key: PYTHON_VERSION
         value: 3.11.6

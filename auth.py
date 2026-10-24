@@ -1,10 +1,8 @@
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
 import re
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-from extensions import db
-from models import User
+import firebase_client
 
 auth_bp = Blueprint("auth", __name__)
-
 
 def validate_password(password):
     """Enforce minimum password security requirements."""
@@ -19,55 +17,67 @@ def validate_password(password):
         errors.append("Password must contain at least one number")
     return errors
 
-
 def validate_email(email):
     """Basic email format validation."""
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(pattern, email))
 
-
 @auth_bp.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
+        if not firebase_client.FIREBASE_API_KEY:
+            flash("Firebase is not configured. Please check your .env file.", "error")
+            return redirect(url_for("auth.signup"))
+            
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
 
-        # --- SECURITY: Input validation ---
         if not name or len(name) > 100:
-            flash("Name is required and must be under 100 characters", "error")
+            flash("Name is required", "error")
             return redirect(url_for("auth.signup"))
 
-        if not email or not validate_email(email) or len(email) > 120:
+        if not email or not validate_email(email):
             flash("Please enter a valid email address", "error")
             return redirect(url_for("auth.signup"))
 
-        # --- SECURITY: Password strength validation ---
         pwd_errors = validate_password(password)
         if pwd_errors:
             for err in pwd_errors:
                 flash(err, "error")
             return redirect(url_for("auth.signup"))
 
-        if User.query.filter_by(email=email).first():
-            flash("User already exists", "error")
+        try:
+            response = firebase_client.sign_up(email, password, name)
+            
+            session["firebase_token"] = response["session"]["access_token"]
+            session["user_id"] = response["user"]["id"]
+            session["user_name"] = response["user"]["user_metadata"]["name"]
+            
+            flash("Signup successful!", "success")
+            return redirect(url_for("settings.onboarding"))
+            
+        except Exception as e:
+            # Log the details server-side; never show internals to the user.
+            current_app.logger.exception("Signup failed")
+            error_msg = str(e)
+            
+            if "EMAIL_EXISTS" in error_msg:
+                flash("User already exists", "error")
+            else:
+                flash("Signup failed. Please try again later.", "error")
+                
             return redirect(url_for("auth.signup"))
-
-        user = User(name=name, email=email)
-        user.set_password(password)
-
-        db.session.add(user)
-        db.session.commit()
-
-        session["user_id"] = user.id
-        session["user_name"] = user.name
-        return redirect(url_for("settings.onboarding"))
 
     return render_template("signup.html")
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
+        if not firebase_client.FIREBASE_API_KEY:
+            flash("Firebase is not configured. Please check your .env file.", "error")
+            return redirect(url_for("auth.login"))
+            
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
 
@@ -75,19 +85,34 @@ def login():
             flash("Please enter both email and password", "error")
             return redirect(url_for("auth.login"))
 
-        user = User.query.filter_by(email=email).first()
-        if not user or not user.check_password(password):
-            # --- SECURITY: Generic error message to prevent user enumeration ---
-            flash("Invalid email or password", "error")
+        try:
+            response = firebase_client.sign_in_with_password(email, password)
+            
+            session["firebase_token"] = response["session"]["access_token"]
+            session["user_id"] = response["user"]["id"]
+            session["user_name"] = response["user"]["user_metadata"]["name"]
+            
+            return redirect(url_for("dashboard"))
+            
+        except Exception as e:
+            # Log the details server-side; never show internals to the user.
+            current_app.logger.exception("Login failed")
+            error_msg = str(e)
+            
+            if "INVALID_LOGIN_CREDENTIALS" in error_msg or "INVALID_PASSWORD" in error_msg or "EMAIL_NOT_FOUND" in error_msg:
+                flash("Invalid email or password", "error")
+            else:
+                flash("Login failed. Please try again later.", "error")
+                
             return redirect(url_for("auth.login"))
-
-        session["user_id"] = user.id
-        session["user_name"] = user.name
-        return redirect(url_for("dashboard"))
 
     return render_template("login.html")
 
-@auth_bp.route("/logout")
+@auth_bp.route("/logout", methods=["POST"])
 def logout():
+    try:
+        firebase_client.sign_out()
+    except:
+        pass
     session.clear()
     return redirect(url_for("home"))
