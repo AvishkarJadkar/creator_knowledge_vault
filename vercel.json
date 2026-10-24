@@ -6,8 +6,11 @@
       "use": "@vercel/python",
       "config": {
         "includeFiles": [
+          "*.py",
+          "explore/**",
           "templates/**",
-          "static/**"
+          "static/**",
+          ".python-version"
         ],
         "maxLambdaSize": "50mb"
       }

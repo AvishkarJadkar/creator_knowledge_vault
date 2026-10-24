@@ -90,18 +90,33 @@ Follow these steps to get Vaulty AI running on your local machine.
    ```bash
    python app.py
    ```
-   *The Flask app will start on local port 8000. SQLite tables (`vault.db`) are created automatically on startup.*
-   
+   *The Flask app starts on local port 8000. The SQLite database (`instance/vault.db`)
+   is created automatically on the first request.*
+
 7. **Access the Application:**
    Open your browser and navigate to: `http://localhost:8000` or `http://127.0.0.0:8000`
 
+8. **Run the test suite (optional but recommended):**
+   ```bash
+   python -m unittest discover -s tests -v
+   ```
+   *18 offline smoke tests covering auth, CRUD, search, uploads, CSRF and error
+   pages. They use a temporary SQLite database and mock the AI calls, so no API
+   quota is consumed.*
+
 ## Deployment (production)
 
-Deploy configs are included for **Render** (`render.yaml`) and **Railway**
-(`railway.json` / `Procfile`). Set these environment variables on the host:
+Deploy configs are included for **Render** (`render.yaml`), **Railway**
+(`railway.json` / `Procfile`) and **Vercel** (`vercel.json`). The app exposes
+`GET /health`, which checks the database and returns `200 {"status":"ok"}` or
+`503` — point your platform's health check at it (already configured in
+`render.yaml` and `railway.json`).
+
+Set these environment variables on the host:
 
 | Variable | Required | Notes |
 | --- | --- | --- |
+| `FLASK_ENV` | ✅ | Set to `production`. Enables secure cookies and HTTPS redirects. |
 | `SECRET_KEY` | ✅ | Long random string. The app refuses to boot without it in production. |
 | `DATABASE_URL` | ✅ | PostgreSQL connection string (Render's blueprint wires this automatically). |
 | `GROQ_API_KEY` | ✅ | Chat, Remix and chat titles. |
@@ -112,6 +127,11 @@ Deploy configs are included for **Render** (`render.yaml`) and **Railway**
 
 Model names can be overridden without code changes:
 `GROQ_CHAT_MODEL`, `GROQ_FAST_MODEL`, `GEMINI_MODEL`, `GEMINI_EMBED_MODEL`.
+
+Dependencies are pinned in `requirements.txt` to the versions this release was
+tested with, and Python is pinned to 3.11.6 (`.python-version`, `render.yaml`).
+Database tables are created on the first request, so a fresh Postgres instance
+needs no manual migration step.
 
 > **Vercel:** `vercel.json` is included, but serverless functions have no
 > persistent filesystem, so uploads and background YouTube syncs won't work.

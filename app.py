@@ -1,5 +1,6 @@
 import os
 import sys
+import threading
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -90,29 +91,60 @@ def ensure_schema_upgrades():
 
     columns = {col["name"] for col in inspector.get_columns("user_api_minute_usage")}
     if "api_type" not in columns:
-        with db.engine.begin() as conn:
-            conn.execute(text("ALTER TABLE user_api_minute_usage ADD COLUMN api_type VARCHAR(50)"))
-            # Old rows lumped every feature into one bucket; drop them.
-            conn.execute(text("DELETE FROM user_api_minute_usage"))
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text("ALTER TABLE user_api_minute_usage ADD COLUMN api_type VARCHAR(50)"))
+                # Old rows lumped every feature into one bucket; drop them.
+                conn.execute(text("DELETE FROM user_api_minute_usage"))
+        except Exception:
+            # Another worker may have added the column between the check and
+            # the ALTER; that's fine.
+            app.logger.warning("Could not add api_type column (may already exist)", exc_info=True)
 
     index_names = {idx["name"] for idx in inspector.get_indexes("user_api_minute_usage")}
     if "ix_user_api_minute_usage_composite" not in index_names:
-        with db.engine.begin() as conn:
-            conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_user_api_minute_usage_composite "
-                "ON user_api_minute_usage (user_id, api_type)"
-            ))
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_user_api_minute_usage_composite "
+                    "ON user_api_minute_usage (user_id, api_type)"
+                ))
+        except Exception:
+            app.logger.warning("Could not create composite usage index", exc_info=True)
 
 
-# Create DB tables on startup. Wrapped in try/except so a transient database
-# outage during a cold start doesn't crash the whole module (which would take
-# /health down with it and make the deploy look broken).
-try:
-    with app.app_context():
+# --- DATABASE: create tables lazily on the first request ---------------------
+# create_all() used to run at import time. That meant every serverless cold
+# start paid for the round trips, and a database outage crashed the whole
+# module (taking /health down with it). It now runs once per process, lazily.
+_schema_ready = False
+_schema_lock = threading.Lock()
+
+
+def init_db_schema():
+    """Create missing tables and apply small upgrades exactly once."""
+    global _schema_ready
+    if _schema_ready:
+        return
+    with _schema_lock:
+        if _schema_ready:
+            return
         db.create_all()
         ensure_schema_upgrades()
-except Exception:
-    app.logger.exception("Database initialisation failed at startup")
+        _schema_ready = True
+
+
+@app.before_request
+def ensure_db_schema():
+    if _schema_ready:
+        return None
+    try:
+        init_db_schema()
+    except Exception:
+        # Leave _schema_ready False so the next request retries; individual
+        # routes will surface their own errors if the DB is still unavailable.
+        app.logger.exception("Database initialisation failed")
+    return None
 
 # --- AUTH MIDDLEWARE: Validate Firebase Session ---
 @app.before_request
@@ -123,6 +155,10 @@ def load_user():
 # --- SECURITY: Force HTTPS in production ---
 @app.before_request
 def force_https():
+    # Never redirect the platform health check: it arrives over the internal
+    # network and some checkers don't follow redirects.
+    if request.path == "/health":
+        return None
     if os.environ.get("FLASK_ENV") != "development":
         if request.headers.get("X-Forwarded-Proto") == "http":
             url = request.url.replace("http://", "https://", 1)

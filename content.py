@@ -11,9 +11,6 @@ from youtube_utils import get_youtube_transcript, get_youtube_title
 
 content_bp = Blueprint("content", __name__)
 
-UPLOAD_FOLDER = os.path.join("/tmp", "uploads") if os.environ.get("VERCEL") else "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 # --- SECURITY: Allowed file extensions ---
 ALLOWED_EXTENSIONS = {".txt", ".pdf"}
 
@@ -30,8 +27,13 @@ def extract_text(file):
     filename = (file.filename or "").lower()
     if filename.endswith(".txt"):
         raw = file.read()
-        # Try the common encodings before falling back to a lossless one.
-        for encoding in ("utf-8-sig", "utf-16", "cp1252", "latin-1"):
+        # Only trust UTF-16 when there's an explicit BOM: decoding arbitrary
+        # even-length bytes as UTF-16 "succeeds" and produces garbage.
+        if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+            encodings = ("utf-16",)
+        else:
+            encodings = ("utf-8-sig", "cp1252", "latin-1")
+        for encoding in encodings:
             try:
                 return raw.decode(encoding)
             except UnicodeDecodeError:

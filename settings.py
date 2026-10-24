@@ -172,6 +172,10 @@ def add_profile():
         })
 
     flash(f"{platform.title()} profile linked successfully!", "success")
+    # The onboarding wizard sends next=dashboard so finishing setup lands the
+    # user in their (now auto-populated) vault instead of the settings page.
+    if request.form.get("next") == "dashboard":
+        return redirect(url_for("dashboard"))
     return redirect(url_for("settings.settings"))
 
 

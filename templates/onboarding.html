@@ -24,6 +24,7 @@
         <form action="/settings/add-profile" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="platform" value="youtube">
+            <input type="hidden" name="next" value="dashboard">
             <div style="margin-bottom: 1.5rem;">
                 <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.6rem; color: var(--text-muted);">CHANNEL URL</label>
                 <div style="position: relative;">
