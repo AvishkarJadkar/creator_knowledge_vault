@@ -133,6 +133,9 @@ Two Render free-tier behaviours are handled by the config in this repo:
 
 ### Deploy on Render
 
+Live instance: <https://vaulty-16po.onrender.com> (Render free, Singapore, Neon
+Postgres in `ap-southeast-1`).
+
 1. Sign up at <https://dashboard.render.com/register> (GitHub login, no card).
 2. Create a Neon project at <https://neon.com/signup> and copy its connection
    string (`postgresql://…?sslmode=require`).

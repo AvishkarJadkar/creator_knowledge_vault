@@ -26,10 +26,11 @@ jobs:
     steps:
       - name: Ping
         run: |
+          # Override with the repository variable VAULTY_URL if the service is
+          # ever recreated under a different hostname.
           url="${{ vars.VAULTY_URL }}"
           if [ -z "$url" ]; then
-            echo "VAULTY_URL repository variable is not set" >&2
-            exit 1
+            url="https://vaulty-16po.onrender.com"
           fi
           code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 --retry 2 --retry-delay 10 "$url/")
           echo "GET $url/ -> $code"
