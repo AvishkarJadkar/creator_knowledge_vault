@@ -23,10 +23,14 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
 # Configure the app *before* importing it.
+# Set TEST_DATABASE_URL to run the same suite against PostgreSQL, e.g.
+#   TEST_DATABASE_URL=postgresql://user:pass@host/db python -m unittest discover -s tests
 _TMP_DIR = tempfile.mkdtemp(prefix="vaulty-tests-")
 os.environ["FLASK_ENV"] = "development"
 os.environ["SECRET_KEY"] = "test-secret-key"
-os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(_TMP_DIR, "test.db").replace("\\", "/")
+os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL") or (
+    "sqlite:///" + os.path.join(_TMP_DIR, "test.db").replace("\\", "/")
+)
 
 from app import app, init_db_schema  # noqa: E402
 from extensions import db  # noqa: E402
