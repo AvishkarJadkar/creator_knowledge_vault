@@ -1,9 +1,10 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify, g
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, g
 from models import Content
 from dotenv import load_dotenv
 import os
 from groq import Groq
-from rate_limit import check_and_increment, roughly_count_tokens
+from ai import GROQ_CHAT_MODEL
+from rate_limit import check_and_increment, refund_usage, roughly_count_tokens
 
 load_dotenv()
 
@@ -81,7 +82,9 @@ def remix(content_id):
             return jsonify({"error": "Unauthorized"}), 401
         return redirect(url_for("auth.login"))
 
-    content = Content.query.filter_by(id=content_id, is_deleted=False).first_or_404()
+    content = Content.query.filter_by(
+        id=content_id, user_id=g.user_id, is_deleted=False
+    ).first_or_404()
 
 
     output = None
@@ -105,6 +108,11 @@ YOUR OUTPUT (ready to copy-paste, no meta-commentary):"""
         if tokens > 3000:
              return jsonify({"error": f"Content too long (approx {tokens} tokens). Maximum 3,000 tokens."}), 400
 
+        # --- Check configuration before spending the user's quota ---
+        client = get_groq_client()
+        if not client:
+            return jsonify({"error": "Groq API Key missing. Please check your server configuration."}), 500
+
         # --- RATE LIMITING: Per-user daily and burst ---
         allowed, msg, retry_after = check_and_increment(g.user_id, "groq_remix")
         if not allowed:
@@ -113,13 +121,9 @@ YOUR OUTPUT (ready to copy-paste, no meta-commentary):"""
                 response.headers["Retry-After"] = str(retry_after)
             return response, 429
 
-        client = get_groq_client()
-        if not client:
-            return jsonify({"error": "Groq API Key missing. Please check your server configuration."}), 500
-
         try:
             response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model=GROQ_CHAT_MODEL,
                 messages=[
                     {"role": "system", "content": "You are a world-class content creator. Your output is always polished, engaging, and ready to publish. Never add disclaimers, explanations, or meta-commentary. Just deliver the content."},
                     {"role": "user", "content": prompt}
@@ -129,6 +133,8 @@ YOUR OUTPUT (ready to copy-paste, no meta-commentary):"""
             )
             output = response.choices[0].message.content
         except Exception as e:
+            # The provider call failed — don't charge the user for it.
+            refund_usage(g.user_id, "groq_remix")
             # --- SECURITY: Don't expose internal errors ---
             print(f"Remix error: {e}")
             output = "Something went wrong while remixing. Please try again."

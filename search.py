@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, g, jsonify
+from extensions import db
 from models import Content, Embedding
 from ai import get_embedding, cosine_similarity
 import json

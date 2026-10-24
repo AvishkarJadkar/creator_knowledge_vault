@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
 import re
 import firebase_client
 
@@ -48,7 +48,6 @@ def signup():
             return redirect(url_for("auth.signup"))
 
         try:
-            print("DEBUG: Attempting signup via Firebase Auth")
             response = firebase_client.sign_up(email, password, name)
             
             session["firebase_token"] = response["session"]["access_token"]
@@ -59,17 +58,14 @@ def signup():
             return redirect(url_for("settings.onboarding"))
             
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            with open("scratch/error.log", "w") as f:
-                f.write(traceback.format_exc())
+            # Log the details server-side; never show internals to the user.
+            current_app.logger.exception("Signup failed")
             error_msg = str(e)
-            print(f"Signup error: {e}", flush=True)
             
             if "EMAIL_EXISTS" in error_msg:
                 flash("User already exists", "error")
             else:
-                flash(f"Signup Failed: {error_msg}", "error")
+                flash("Signup failed. Please try again later.", "error")
                 
             return redirect(url_for("auth.signup"))
 
@@ -90,7 +86,6 @@ def login():
             return redirect(url_for("auth.login"))
 
         try:
-            print("DEBUG: Attempting login via Firebase Auth")
             response = firebase_client.sign_in_with_password(email, password)
             
             session["firebase_token"] = response["session"]["access_token"]
@@ -100,15 +95,14 @@ def login():
             return redirect(url_for("dashboard"))
             
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            # Log the details server-side; never show internals to the user.
+            current_app.logger.exception("Login failed")
             error_msg = str(e)
-            print(f"Login error: {e}", flush=True)
             
             if "INVALID_LOGIN_CREDENTIALS" in error_msg or "INVALID_PASSWORD" in error_msg or "EMAIL_NOT_FOUND" in error_msg:
                 flash("Invalid email or password", "error")
             else:
-                flash(f"Login Failed: {error_msg}", "error")
+                flash("Login failed. Please try again later.", "error")
                 
             return redirect(url_for("auth.login"))
 

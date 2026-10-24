@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify, g
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from models import Content, Embedding, ChatSession, ChatMessage, Memory
 from extensions import db
 from dotenv import load_dotenv
@@ -7,8 +7,8 @@ import json
 import re
 from datetime import datetime, timedelta
 from groq import Groq
-from ai import get_embedding, cosine_similarity
-from rate_limit import check_and_increment, roughly_count_tokens
+from ai import get_embedding, cosine_similarity, GROQ_CHAT_MODEL, GROQ_FAST_MODEL
+from rate_limit import check_and_increment, refund_usage, roughly_count_tokens
 
 load_dotenv()
 
@@ -28,37 +28,45 @@ def get_groq_client():
 def generate_chat_title(user_msg, bot_msg, user_id=None):
     """Uses LLM to generate a short, contextual chat title.
     Counts against the user's groq_chat quota."""
+    client = get_groq_client()
+    if not client:
+        return user_msg[:50]
+
     # Count this LLM call against the user's daily quota
     if user_id:
         allowed, msg, _ = check_and_increment(user_id, "groq_chat")
         if not allowed:
             return user_msg[:50]  # Graceful fallback — use raw text
-    client = get_groq_client()
-    if not client:
-        return user_msg[:50]
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_FAST_MODEL,
             messages=[{"role": "user", "content": f"Generate a short chat title (3-5 words max, no quotes, no punctuation) that summarizes this conversation:\n\nUser: {user_msg}\nAssistant: {bot_msg[:200]}\n\nTitle:"}],
             temperature=0.7,
-            max_tokens=15
+            max_tokens=64
         )
         title = response.choices[0].message.content.strip().strip('"\'')
         # Remove any trailing punctuation
         title = title.rstrip('.!?')
         return title[:50] if len(title) > 3 else "New Chat"
     except:
+        if user_id:
+            refund_usage(user_id, "groq_chat")
         return user_msg[:50]
 
 def extract_fact(text, history, user_id=None):
     """Uses LLM to extract a clean fact from 'remember' style messages.
     Counts against the user's groq_chat quota."""
+    client = get_groq_client()
+    if not client:
+        return None
+
     # Count this LLM call against the user's daily quota
     if user_id:
         allowed, msg, _ = check_and_increment(user_id, "groq_chat")
         if not allowed:
             return None  # Graceful fallback — skip memory extraction
+
     prompt = f"""Extract ONLY the explicitly stated fact from the user's message.
 Format as a single, concise sentence starting with "The user...".
 If the message is vague (e.g., "remember name" without giving a name), return "NONE".
@@ -71,13 +79,10 @@ USER MESSAGE:
 {text}
 
 EXTRACTED FACT:"""
-    client = get_groq_client()
-    if not client:
-        return None
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_FAST_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=100
@@ -87,6 +92,8 @@ EXTRACTED FACT:"""
         fact = re.sub(r'^(Here is the fact:|Fact:|Extracted Fact:)\s*', '', fact, flags=re.IGNORECASE).strip()
         return None if "NONE" in fact.upper() or len(fact) < 5 else fact
     except:
+        if user_id:
+            refund_usage(user_id, "groq_chat")
         return None
 
 @chat_bp.route("/chat")
@@ -174,6 +181,11 @@ def send_message(session_id):
     tokens = roughly_count_tokens(question)
     if tokens > 3000:
         return jsonify({"error": f"Message too long (approx {tokens} tokens). Maximum 3,000 tokens."}), 400
+
+    # --- CONFIG CHECK: fail before consuming quota or saving the message ---
+    client = get_groq_client()
+    if not client:
+        return jsonify({"error": "Groq API Key missing. Please check your server configuration."}), 500
 
     # --- RATE LIMITING: Per-user daily and burst ---
     allowed, msg, retry_after = check_and_increment(g.user_id, "groq_chat")
@@ -287,13 +299,9 @@ def send_message(session_id):
         llm_messages.append({"role": "system", "content": f"[SYSTEM NOTE: You just saved this fact to your long-term memory: '{memory_saved_fact}'. Confirm this to the user in your response.]"})
 
     # 6. Call LLM
-    client = get_groq_client()
-    if not client:
-        return jsonify({"error": "Groq API Key missing. Please check your server configuration."}), 500
-
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_CHAT_MODEL,
             messages=llm_messages,
             temperature=0,
             max_tokens=1024,
@@ -321,6 +329,8 @@ def send_message(session_id):
             "memory_saved": memory_saved_fact
         })
     except Exception as e:
+        # The provider call failed — don't charge the user for it.
+        refund_usage(g.user_id, "groq_chat")
         # --- SECURITY: Don't expose internal errors to users ---
         print(f"Chat error: {e}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
@@ -334,7 +344,7 @@ def delete_session(session_id):
         return redirect(url_for("auth.login"))
         
     chat_sess = ChatSession.query.get_or_404(session_id)
-    if chat_sess.user_id != session["user_id"]:
+    if chat_sess.user_id != g.user_id:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({"error": "Unauthorized"}), 403
         return redirect(url_for("chat.chat"))
@@ -356,7 +366,7 @@ def delete_memory(memory_id):
         return redirect(url_for("auth.login"))
     
     mem = Memory.query.get_or_404(memory_id)
-    if mem.user_id != session["user_id"]:
+    if mem.user_id != g.user_id:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({"error": "Unauthorized"}), 403
         return redirect(url_for("chat.chat"))

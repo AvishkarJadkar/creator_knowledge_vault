@@ -6,6 +6,9 @@ load_dotenv()
 
 FIREBASE_API_KEY = os.environ.get("FIREBASE_API_KEY", "")
 
+# Identity Toolkit calls must never hang a request thread.
+FIREBASE_TIMEOUT = 10
+
 def _get_api_key():
     if not FIREBASE_API_KEY:
         raise ValueError("FIREBASE_API_KEY is missing from .env file")
@@ -22,7 +25,7 @@ def sign_up(email, password, name=None):
         "returnSecureToken": True
     }
     
-    response = requests.post(url, json=payload)
+    response = requests.post(url, json=payload, timeout=FIREBASE_TIMEOUT)
     data = response.json()
     
     if "error" in data:
@@ -39,7 +42,7 @@ def sign_up(email, password, name=None):
             "displayName": name,
             "returnSecureToken": True
         }
-        update_response = requests.post(update_url, json=update_payload)
+        update_response = requests.post(update_url, json=update_payload, timeout=FIREBASE_TIMEOUT)
         update_data = update_response.json()
         if "error" in update_data:
             # Profile update failed, but user was created
@@ -61,7 +64,7 @@ def sign_in_with_password(email, password):
         "returnSecureToken": True
     }
     
-    response = requests.post(url, json=payload)
+    response = requests.post(url, json=payload, timeout=FIREBASE_TIMEOUT)
     data = response.json()
     
     if "error" in data:
@@ -77,7 +80,7 @@ def sign_in_with_password(email, password):
         lookup_url = f"https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={api_key}"
         lookup_payload = {"idToken": id_token}
         try:
-            lookup_res = requests.post(lookup_url, json=lookup_payload).json()
+            lookup_res = requests.post(lookup_url, json=lookup_payload, timeout=FIREBASE_TIMEOUT).json()
             if "users" in lookup_res and len(lookup_res["users"]) > 0:
                 display_name = lookup_res["users"][0].get("displayName")
         except:

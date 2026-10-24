@@ -61,8 +61,14 @@ class UserApiUsage(db.Model):
     __table_args__ = (db.Index('ix_user_api_usage_composite', 'user_id', 'api_type'),)
 
 class UserApiMinuteUsage(db.Model):
-    """Tracks per-minute burst usage per user."""
+    """Tracks per-minute burst usage per user *and* API type.
+
+    Keeping the api_type here is essential: a single shared bucket meant a
+    chat message could exhaust the remix/search burst allowance.
+    """
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.String(36), nullable=False, index=True)
+    api_type = db.Column(db.String(50), index=True, nullable=False, default="groq_chat")
     call_count = db.Column(db.Integer, default=0)
     minute_start = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.Index('ix_user_api_minute_usage_composite', 'user_id', 'api_type'),)

@@ -1,9 +1,9 @@
 import re
 import feedparser
 import urllib.request
-import os
+from urllib.parse import urlparse
 import json
-from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify, g
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from extensions import db
 from models import SocialProfile, Content, Embedding
 from youtube_utils import get_youtube_transcript
@@ -12,9 +12,35 @@ from rate_limit import get_usage_stats
 
 settings_bp = Blueprint("settings", __name__)
 
+# Only these hosts may be fetched when resolving a channel ID. Without this
+# allowlist the endpoint could be used as an SSRF proxy (e.g. to reach
+# http://169.254.169.254/ metadata services).
+ALLOWED_YOUTUBE_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+}
+
+
+def _is_allowed_youtube_url(url):
+    """Return True only for http(s) URLs on a YouTube host."""
+    try:
+        parsed = urlparse(url)
+    except (ValueError, AttributeError):
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    return (parsed.hostname or "").lower() in ALLOWED_YOUTUBE_HOSTS
+
 
 def resolve_channel_id(url):
     """Resolve a YouTube URL to a channel ID by fetching the page and extracting it."""
+    # Reject anything that is not a YouTube URL before making a request.
+    if not _is_allowed_youtube_url(url):
+        print("Blocked channel resolve for non-YouTube URL")
+        return None
+
     try:
         # If already a channel ID URL
         match = re.search(r'youtube\.com/channel/(UC[\w-]+)', url)
@@ -24,7 +50,11 @@ def resolve_channel_id(url):
         # For handles (@username) or custom URLs, fetch the page to find channel ID
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as resp:
-            html = resp.read().decode('utf-8', errors='ignore')
+            # A redirect could point anywhere — re-check the final host.
+            if not _is_allowed_youtube_url(resp.geturl()):
+                print("Blocked channel resolve after redirect")
+                return None
+            html = resp.read(1024 * 1024).decode('utf-8', errors='ignore')
 
         # Look for channel ID in the page source
         match = re.search(r'"channelId":"(UC[\w-]+)"', html)

@@ -2,9 +2,19 @@ import os
 from google import genai
 from dotenv import load_dotenv
 import math
-from rate_limit import check_and_increment
+from rate_limit import check_and_increment, refund_usage
 
 load_dotenv()
+
+# --- MODEL CONFIGURATION ------------------------------------------------
+# Verified against the live provider catalogs: the previously hardcoded
+# `llama-3.3-70b-versatile`, `llama-3.1-8b-instant` and `gemini-2.0-flash`
+# models have been retired and now fail with 404s. Override any of these with
+# environment variables without touching the code.
+GROQ_CHAT_MODEL = os.getenv("GROQ_CHAT_MODEL", "qwen/qwen3.8-27b")
+GROQ_FAST_MODEL = os.getenv("GROQ_FAST_MODEL", "qwen/qwen3.8-27b")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
 
 _client = None
 
@@ -30,25 +40,28 @@ def get_embedding(text: str, user_id: str = None):
         print(f"DEBUG: Embedding text too long ({len(text)} characters). Truncating.")
         text = text[:10000]
 
+    # --- CONFIG CHECK: fail before consuming quota ---
+    client = get_client()
+    if not client:
+        print("DEBUG: Gemini API Key missing. Skipping embedding.")
+        return None
+
     # --- RATE LIMITING: Per-user checks ---
     if user_id:
         allowed, msg, _ = check_and_increment(user_id, "gemini_embed")
         if not allowed:
             print(f"DEBUG: Rate limit exceeded for {user_id}: {msg}")
             return None
-    
-    client = get_client()
-    if not client:
-        print("DEBUG: Gemini API Key missing. Skipping embedding.")
-        return None
-    
+
     try:
         result = client.models.embed_content(
-            model="gemini-embedding-001",
+            model=GEMINI_EMBED_MODEL,
             contents=text,
         )
         return result.embeddings[0].values
     except Exception as e:
+        if user_id:
+            refund_usage(user_id, "gemini_embed")
         print(f"DEBUG: Embedding Error: {type(e).__name__}: {e}")
         return None
 
@@ -71,6 +84,11 @@ def generate_summary(text: str, user_id: str = None) -> str:
     if not text or not text.strip():
         return "No content available to summarize."
     
+    # --- CONFIG CHECK: fail before consuming quota ---
+    client = get_client()
+    if not client:
+        return "⚠️ Gemini API Key missing. Please check your server configuration."
+
     # --- RATE LIMITING: Per-user checks ---
     if user_id:
         allowed, msg, _ = check_and_increment(user_id, "gemini_explore")
@@ -101,18 +119,15 @@ def generate_summary(text: str, user_id: str = None) -> str:
     
     Research Summary:
     """
-    
-    client = get_client()
-    if not client:
-        return "⚠️ Gemini API Key missing. Please check your server configuration."
 
     try:
-        # Use more robust model name identifier
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=GEMINI_MODEL,
             contents=prompt,
         )
         return response.text
     except Exception as e:
+        if user_id:
+            refund_usage(user_id, "gemini_explore")
         print(f"DEBUG: Summary Error: {type(e).__name__}: {e}")
         return "Failed to generate research summary."

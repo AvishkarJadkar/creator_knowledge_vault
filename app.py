@@ -9,6 +9,7 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 from flask import Flask, redirect, url_for, session, render_template, request, g
+from werkzeug.middleware.proxy_fix import ProxyFix
 from extensions import db
 from auth import auth_bp
 from content import content_bp
@@ -20,6 +21,10 @@ from explore import explore_bp
 from flask_wtf.csrf import CSRFProtect
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"), static_folder=os.path.join(BASE_DIR, "static"))
+
+# --- PROXY: trust the single reverse proxy in front of the app ---
+# Render/Railway terminate TLS and forward X-Forwarded-* headers.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # --- SECURITY: Secret key ---
 app.secret_key = os.environ.get("SECRET_KEY")
@@ -43,7 +48,11 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
 # --- DATABASE: PostgreSQL in production, SQLite for local dev ---
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-INSTANCE_DIR = os.path.join(BASE_DIR, "instance")
+# Serverless platforms (Vercel) have a read-only filesystem except /tmp.
+if os.environ.get("VERCEL"):
+    INSTANCE_DIR = os.path.join("/tmp", "instance")
+else:
+    INSTANCE_DIR = os.path.join(BASE_DIR, "instance")
 os.makedirs(INSTANCE_DIR, exist_ok=True)  # Ensure the instance directory exists
 
 database_url = os.environ.get("DATABASE_URL", f"sqlite:///{os.path.join(INSTANCE_DIR, 'vault.db')}")
@@ -65,9 +74,40 @@ app.register_blueprint(explore_bp)
 
 from models import Content # Ensure models are loaded
 
-# Create DB tables on first request
+
+def ensure_schema_upgrades():
+    """Apply small schema upgrades that db.create_all() cannot handle.
+
+    create_all() only creates missing *tables*; it never adds columns to an
+    existing table. This keeps already-deployed databases working without
+    pulling in a full migration framework.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(db.engine)
+    if "user_api_minute_usage" not in inspector.get_table_names():
+        return
+
+    columns = {col["name"] for col in inspector.get_columns("user_api_minute_usage")}
+    if "api_type" not in columns:
+        with db.engine.begin() as conn:
+            conn.execute(text("ALTER TABLE user_api_minute_usage ADD COLUMN api_type VARCHAR(50)"))
+            # Old rows lumped every feature into one bucket; drop them.
+            conn.execute(text("DELETE FROM user_api_minute_usage"))
+
+    index_names = {idx["name"] for idx in inspector.get_indexes("user_api_minute_usage")}
+    if "ix_user_api_minute_usage_composite" not in index_names:
+        with db.engine.begin() as conn:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_user_api_minute_usage_composite "
+                "ON user_api_minute_usage (user_id, api_type)"
+            ))
+
+
+# Create DB tables on startup
 with app.app_context():
     db.create_all()
+    ensure_schema_upgrades()
 
 # --- AUTH MIDDLEWARE: Validate Firebase Session ---
 @app.before_request

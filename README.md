@@ -73,19 +73,49 @@ Follow these steps to get Vaulty AI running on your local machine.
    # APIs (Required)
    GROQ_API_KEY=your_groq_api_key_here
    GEMINI_API_KEY=your_google_api_key_here
+   FIREBASE_API_KEY=your_firebase_web_api_key_here
+
+   # Optional: Reddit API for Explore (falls back to Hacker News when unset)
+   # REDDIT_CLIENT_ID=your_reddit_client_id
+   # REDDIT_CLIENT_SECRET=your_reddit_client_secret
 
    # Database (Optional - Defaults to SQLite if omitted)
    # DATABASE_URL=postgresql://user:password@localhost/dbname
    ```
 
+   > `FIREBASE_API_KEY` is required for signup/login. Grab it from the Firebase
+   > console → Project settings → Your apps → Web API key.
+
 6. **Initialize the Database & Run the Application:**
    ```bash
    python app.py
    ```
-   *The Flask app will start on local port 8000 and the required SQLite tables (`vault.db`) will be created automatically on the first request.*
+   *The Flask app will start on local port 8000. SQLite tables (`vault.db`) are created automatically on startup.*
    
 7. **Access the Application:**
    Open your browser and navigate to: `http://localhost:8000` or `http://127.0.0.0:8000`
+
+## Deployment (production)
+
+Deploy configs are included for **Render** (`render.yaml`) and **Railway**
+(`railway.json` / `Procfile`). Set these environment variables on the host:
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `SECRET_KEY` | ✅ | Long random string. The app refuses to boot without it in production. |
+| `DATABASE_URL` | ✅ | PostgreSQL connection string (Render's blueprint wires this automatically). |
+| `GROQ_API_KEY` | ✅ | Chat, Remix and chat titles. |
+| `GEMINI_API_KEY` | ✅ | Embeddings + Explore summaries. |
+| `FIREBASE_API_KEY` | ✅ | Signup/login. Without it auth is disabled. |
+| `REDDIT_CLIENT_ID` | optional | Enables Reddit's authenticated API for Explore. |
+| `REDDIT_CLIENT_SECRET` | optional | Without Reddit creds, Explore falls back to Hacker News. |
+
+Model names can be overridden without code changes:
+`GROQ_CHAT_MODEL`, `GROQ_FAST_MODEL`, `GEMINI_MODEL`, `GEMINI_EMBED_MODEL`.
+
+> **Vercel:** `vercel.json` is included, but serverless functions have no
+> persistent filesystem, so uploads and background YouTube syncs won't work.
+> Use Render or Railway with PostgreSQL for the full feature set.
 
 ## Contributing
 
