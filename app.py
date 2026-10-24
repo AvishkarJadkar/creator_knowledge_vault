@@ -59,6 +59,10 @@ os.makedirs(INSTANCE_DIR, exist_ok=True)  # Ensure the instance directory exists
 database_url = os.environ.get("DATABASE_URL", f"sqlite:///{os.path.join(INSTANCE_DIR, 'vault.db')}")
 if database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
+# SQLAlchemy 2.1 defaults `postgresql://` to the psycopg 3 driver, but this app
+# ships psycopg2-binary. Pin the driver so any host-provided URL works as-is.
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
