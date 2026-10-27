@@ -95,6 +95,12 @@ class VaultySmokeTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["status"], "ok")
 
+    def test_liveness_does_not_touch_the_database(self):
+        with mock.patch.object(db.session, "execute", side_effect=RuntimeError("db down")):
+            response = self.client.get("/healthz")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["status"], "ok")
+
     def test_health_reports_database_failure(self):
         with mock.patch.object(db.session, "execute", side_effect=RuntimeError("db down")):
             with self.assertLogs("app", level="ERROR"):

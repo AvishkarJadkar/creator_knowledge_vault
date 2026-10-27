@@ -334,7 +334,7 @@ Rejected calls are **refunded** so a failed AI request never burns a credit. Adj
 
 ```text
 creator_knowledge_vault/
-├── app.py                 # App factory: config, ProxyFix, hooks, error handlers, /health
+├── app.py                 # App factory: config, ProxyFix, hooks, error handlers, /health, /healthz
 ├── auth.py                # Signup / login / logout (Firebase + server session)
 ├── content.py             # Add, view, soft-delete, restore, bulk purge
 ├── search.py              # Semantic search + snippet builder
@@ -367,6 +367,7 @@ creator_knowledge_vault/
 | Method | Path | Purpose |
 | :--- | :--- | :--- |
 | `GET` | `/` | Landing page, or redirect to dashboard when signed in |
+| `GET` | `/healthz` | Liveness only, no database call (`200`) — used by Render/Docker health checks |
 | `GET` | `/health` | Liveness + `SELECT 1` database check (`200` / `503`) |
 | `GET` `POST` | `/signup`, `/login` | Firebase-backed auth |
 | `POST` | `/logout` | CSRF-protected sign out |
@@ -407,10 +408,16 @@ The repo ships four deployment paths. The live instance uses the first one.
 4. Fill the `sync: false` env vars (table above); `DATABASE_URL` is the Neon string.
 5. Optionally set the repository variable `VAULTY_URL` (Settings → Secrets and variables → Actions → Variables) if your hostname differs from the default in the workflow.
 
-**Two free-tier traps, already handled:**
+**Free-tier traps, already handled:**
 
-- **15-minute spin-down.** The keep-alive workflow pings `/` every 5 minutes, so the service never idles long enough to sleep. This uses ~744 of the 750 monthly instance hours — if Render ever suspends the service, trim the cron to daytime hours.
-- **Free Postgres expires after 30 days.** That is why the database is on Neon. The ping deliberately hits `/` (not `/health`) so Neon is allowed to scale to zero and stay inside its 100 CU-hour allowance.
+- **15-minute spin-down.** The keep-alive workflow pings `/` every 5 minutes, so the service should never idle long enough to sleep. In practice GitHub's scheduler is best-effort and often coalesces these runs to one every few hours, which is *not* enough — so add a free external pinger as well:
+  1. Create a free account at [cron-job.org](https://cron-job.org) (or UptimeRobot / Better Stack).
+  2. Add a job for `https://vaulty-16po.onrender.com/` (**not** `/health`) every 5 minutes.
+  3. Keep the GitHub workflow as a backup, and check its runs occasionally.
+
+  Pinging `/` instead of `/health` lets Neon scale to zero, staying inside its 100 CU-hour allowance.
+- **Free Postgres expires after 30 days.** That is why the database is on Neon.
+- **750 instance hours/month.** Running 24/7 uses ~744 of the 750 free hours, leaving very little headroom — if Render ever suspends the service, trim the pinger to daytime hours (e.g. `0 1-18 * * *` UTC) so it sleeps at night.
 
 ### Docker
 
@@ -419,7 +426,7 @@ docker build -t vaulty .
 docker run --rm -p 8000:8000 --env-file .env -e FLASK_ENV=development vaulty
 ```
 
-The image runs `gunicorn app:app --workers 2 --threads 4 --timeout 120 --preload` and exposes `GET /health` for container health checks.
+The image runs `gunicorn app:app --workers 2 --threads 4 --timeout 120 --preload` and exposes `GET /healthz` for container health checks.
 
 ### Railway
 
@@ -438,7 +445,8 @@ The image runs `gunicorn app:app --workers 2 --threads 4 --timeout 120 --preload
 | `ModuleNotFoundError: No module named 'psycopg'` | SQLAlchemy 2.0 defaults `postgresql://` to psycopg **3**, but this app ships psycopg2 | Already fixed — `app.py` rewrites the URL to `postgresql+psycopg2://` |
 | App exits on boot in production | `SECRET_KEY` missing | Set a long random `SECRET_KEY` |
 | Login/signup page loads but auth fails | `FIREBASE_API_KEY` missing or wrong project | Re-copy the Web API key from Firebase |
-| First request takes ~1 minute | Render free instance was asleep | Keep-alive workflow should prevent it; check Actions → *Keep the free Render service awake* |
+| First request takes ~1 minute, or the browser shows Render's "service starting" splash | Render free instance was asleep (15-minute spin-down) | Add the external 5-minute pinger from the keep-alive section — GitHub's cron alone runs too rarely |
+| Deploy marked **failed** but the previous version still serves | Platform health check hit a sleeping database, or free instance hours ran out | Health checks now use `/healthz`; check the Render event log for `health check` vs `exited with status` |
 | `503` from `/health` | Database unreachable | Check `DATABASE_URL`, Neon project status, and that `sslmode=require` is present |
 | YouTube import fails | The video has no transcript, or the IP is rate-limited by YouTube | Retry later or paste the text as a note |
 | `429` / "credits" message | Free-tier bucket exhausted | See the credit table above; counters live in `user_api_usage` |

@@ -1,5 +1,4 @@
 import re
-import feedparser
 import urllib.request
 from urllib.parse import urlparse
 import json
@@ -259,6 +258,9 @@ def sync_youtube_channel(profile, user_id=None):
         # a background sync thread forever. Fetch with an explicit timeout.
         response = requests.get(rss_url, timeout=10)
         response.raise_for_status()
+        # Imported here so the (slow) SDK import does not delay app boot.
+        import feedparser
+
         feed = feedparser.parse(response.content)
     except Exception as e:
         return 0, f"Failed to fetch RSS feed: {e}"

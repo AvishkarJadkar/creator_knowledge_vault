@@ -1,5 +1,4 @@
 import os
-from google import genai
 from dotenv import load_dotenv
 import math
 from rate_limit import check_and_increment, refund_usage
@@ -27,6 +26,9 @@ def get_client():
             # We don't raise an error here so the app doesn't crash on startup.
             # Instead, we'll return None and handle it in the functions.
             return None
+        # Imported here so the (slow) SDK import does not delay app boot.
+        from google import genai
+
         _client = genai.Client(api_key=api_key)
     return _client
 

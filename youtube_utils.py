@@ -1,6 +1,4 @@
 import re
-from youtube_transcript_api import YouTubeTranscriptApi
-import yt_dlp
 
 def extract_video_id(url: str):
     patterns = [
@@ -14,6 +12,10 @@ def extract_video_id(url: str):
     return None
 
 def get_youtube_transcript(url: str):
+    # Imported lazily: these SDKs are slow to import and only needed here,
+    # so app boot (and Render cold starts) stay fast.
+    from youtube_transcript_api import YouTubeTranscriptApi
+
     video_id = extract_video_id(url)
     if not video_id:
         raise ValueError("Invalid YouTube URL")
@@ -35,6 +37,9 @@ def get_youtube_transcript(url: str):
     return " ".join(item.text for item in transcript_data)
 
 def get_youtube_title(url: str) -> str:
+    # Lazily imported; see the note in get_youtube_transcript().
+    import yt_dlp
+
     ydl_opts = {
         "quiet": True,
         "skip_download": True,

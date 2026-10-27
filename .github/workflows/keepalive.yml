@@ -6,6 +6,13 @@ name: Keep the free Render service awake
 #
 # This hits "/" rather than "/health" on purpose: /health queries Postgres, and
 # keeping the database awake 24/7 would burn through Neon's free CU-hours.
+#
+# IMPORTANT: GitHub's scheduler is best-effort and, on free/public repos, often
+# coalesces these runs to one every few hours instead of every 5 minutes. That
+# is not enough to beat Render's 15-minute spin-down, so treat this workflow as
+# a backup and add an external pinger (cron-job.org, UptimeRobot, Better Stack)
+# for the URL if you need the site warm around the clock. See README
+# "Deployment -> Keep-alive".
 
 on:
   schedule:
@@ -22,7 +29,7 @@ concurrency:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 10
     steps:
       - name: Ping
         run: |
@@ -32,6 +39,19 @@ jobs:
           if [ -z "$url" ]; then
             url="https://vaulty-16po.onrender.com"
           fi
-          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 --retry 2 --retry-delay 10 "$url/")
-          echo "GET $url/ -> $code"
-          test "$code" -lt 500
+
+          # A sleeping free instance can take 60-90s to answer, so give each
+          # attempt room. curl prints 000 when it times out or cannot connect;
+          # that used to slip through `test "$code" -lt 500` and report success
+          # even when the service was completely down.
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 100 "$url/" || true)
+            echo "attempt ${attempt}: GET $url/ -> ${code}"
+            if [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+
+          echo "::error::Keep-alive failed: $url did not return a 2xx/3xx response"
+          exit 1

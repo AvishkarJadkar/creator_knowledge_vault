@@ -66,6 +66,17 @@ if database_url.startswith("postgresql://"):
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
+# Neon (and any serverless Postgres) closes idle sockets when it scales to
+# zero, so a pooled connection can be dead by the time a worker reuses it.
+# pre_ping drops those instead of raising, and the short connect timeout stops
+# a sleeping database from hanging a worker (or a platform health check) for
+# the OS default of ~2 minutes.
+engine_options = {"pool_pre_ping": True}
+if database_url.startswith("postgresql"):
+    engine_options["pool_recycle"] = 300
+    engine_options["connect_args"] = {"connect_timeout": 5}
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_options
+
 db.init_app(app)
 
 # Register Blueprints
@@ -140,7 +151,9 @@ def init_db_schema():
 
 @app.before_request
 def ensure_db_schema():
-    if _schema_ready:
+    # Health probes must never wait on (or wake) Postgres: /healthz is used by
+    # the platform and has to answer even while the database is unreachable.
+    if _schema_ready or request.path in ("/healthz", "/health"):
         return None
     try:
         init_db_schema()
@@ -228,6 +241,16 @@ def csrf_error(error):
         "error.html", code=400, title="Session expired",
         message="Your session expired. Please refresh the page and try again.",
     ), 400
+
+@app.route("/healthz")
+def liveness():
+    """Cheap liveness probe for the platform: no database round trip.
+
+    Render and Docker health checks hit this endpoint, so a slow or sleeping
+    Postgres can never fail a deploy or trigger a restart loop. `/health`
+    remains the stricter probe that also checks the database.
+    """
+    return {"status": "ok"}, 200
 
 @app.route("/health")
 def health():

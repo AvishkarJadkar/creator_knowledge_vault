@@ -2,7 +2,6 @@ import os
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g, current_app
 from extensions import db
 from models import Content
-from pypdf import PdfReader
 import json
 from ai import get_embedding
 from models import Embedding
@@ -41,6 +40,9 @@ def extract_text(file):
         return raw.decode("utf-8", errors="replace")
 
     if filename.endswith(".pdf"):
+        # Imported here so the (slow) SDK import does not delay app boot.
+        from pypdf import PdfReader
+
         reader = PdfReader(file)
         text = ""
         for page in reader.pages:

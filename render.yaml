@@ -7,7 +7,9 @@ services:
     buildCommand: pip install -r requirements.txt
     # Free instances get 0.1 CPU / 512 MB, so run a single worker with threads.
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 --preload
-    healthCheckPath: /health
+    # Liveness only: no database round trip, so a sleeping Neon compute can
+    # never make a good deploy look failed.
+    healthCheckPath: /healthz
     envVars:
       - key: FLASK_ENV
         value: production

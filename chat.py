@@ -6,7 +6,6 @@ import os
 import json
 import re
 from datetime import datetime, timedelta
-from groq import Groq
 from ai import get_embedding, cosine_similarity, GROQ_CHAT_MODEL, GROQ_FAST_MODEL
 from rate_limit import check_and_increment, refund_usage, roughly_count_tokens
 
@@ -22,6 +21,9 @@ def get_groq_client():
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             return None
+        # Imported here so the (slow) SDK import does not delay app boot.
+        from groq import Groq
+
         _groq_client = Groq(api_key=api_key)
     return _groq_client
 

@@ -19,6 +19,9 @@ def get_groq_client():
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             return None
+        # Imported here so the (slow) SDK import does not delay app boot.
+        from groq import Groq
+
         _groq_client = Groq(api_key=api_key)
     return _groq_client
 
